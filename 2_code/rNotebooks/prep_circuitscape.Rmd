@@ -1,0 +1,140 @@
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 500px;
+}
+```
+
+
+Test test test
+
+### setup {-}
+
+#### load packages {-}
+
+```{r eval=F}
+library(sf)
+library(tmap)
+library(RColorBrewer)
+```
+
+
+#### load spatial data {-}
+
+1. Load and plot the ribbon of green shape file *RoG_Reaches_V1_210301.shp* within the city boundary.
+
+```{r eval=FALSE}
+# load ribbon of green
+RoG_Reaches<-st_read("1_data/external/Ribbon_of_Green_Study_Area_Reaches/Reach_Boundaries/RoG_Reaches_V1_210301/RoG_Reaches_V1_210301.shp")
+
+# check crs
+st_crs(RoG_Reaches)
+# NAD83_3TM_114_Longitude_Meter_Province_of_Alberta_Canada
+
+# load city boundary
+City_Boundary<-st_read("1_data/external/City_Boundary/City_Boundary.shp")
+
+# reproject to match the CRS of RoG_reaches 
+City_Boundary<-st_transform(City_Boundary, crs = st_crs(RoG_Reaches))
+
+#load road data
+v_road<-st_read("1_data/external/roads_data/V_ROAD_SEGMENT_CUR.shp")
+# reproject to match the CRS of RoG_reaches 
+v_road<-st_transform(v_road, crs = st_crs(RoG_Reaches))
+
+# crop roads file by a bounding box of the north saskatchewan central region polygon
+v_road_1<-st_crop(v_road, City_Boundary)
+
+#plot shape file
+tmap_mode("plot")
+m<-tm_shape(City_Boundary)+tm_borders()+tm_fill(col="#d9d9d9")+
+  tm_layout(frame=FALSE, legend.text.size=.5, legend.width=2, legend.position=c("left","bottom"),)+
+  tm_legend(outside=TRUE, frame=FALSE)+
+  tm_shape(v_road_1)+tm_lines(col="white", lwd = .4)+
+  tm_shape(RoG_Reaches)+
+   tm_fill(col="Reach", palette = "Paired", contrast = c(0.26, 1),alpha = .7, title="Ribbon of Green Reaches")
+m
+
+
+tmap_save(m, "4_output/maps/ribbonGreen_map.png", asp=0, outer.margins=c(0,0,0,0))
+
+```
+
+```{r echo=FALSE, fig.cap= "Ribbon of Green.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/ribbonGreen_map.png")
+```
+
+For this project I focused on the north saskatchewan central region of the ribbon of green
+
+```{r eval=FALSE, include=FALSE}
+
+# get study area polygon fpr the north saskatchewan central region
+nscr<-RoG_Reaches[14,]
+
+# creata a bounding box around study area
+bbox_new<-st_bbox(nscr)
+xrange <- bbox_new$xmax - bbox_new$xmin # range of x values
+yrange <- bbox_new$ymax - bbox_new$ymin # range of y values
+
+# increase the size of bounding box
+  bbox_new[1] <- bbox_new[1] - (0.1 * xrange) # xmin - left
+  bbox_new[3] <- bbox_new[3] + (0.1 * xrange) # xmax - right
+  bbox_new[2] <- bbox_new[2] - (0.2 * yrange) # ymin - bottom
+  bbox_new[4] <- bbox_new[4] + (0.2 * yrange) # ymax - top
+
+  bbox <- bbox_new %>%  # take the bounding box ...
+  st_as_sfc() # ... and make it a sf polygon
+
+# crop roads file by a bounding box of the north saskatchewan central region polygon
+v_road_2<-st_crop(v_road, bbox)
+
+
+tmap_mode("plot")
+
+m2<-
+  tm_shape(v_road_2)+tm_lines(col="white")+
+  tm_shape(nscr)+
+   tm_fill(col="#238b45", alpha = .5)+
+   tm_layout(bg.col="#d9d9d9")
+m2
+
+tmap_save(m2, "4_output/maps/studyArea_map.png", outer.margins=c(0,0,0,0))
+```
+
+```{r echo=FALSE, fig.cap= "The North Saskatchewan Central region of the Ribbon of Green.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/studyArea_map.png")
+```
+
+2. Load the connectivity and pinchpoint polygons extracted from circuitscape
+
+```{r}
+# Load summer coyote pinchpoints
+pp_s<-st_read("1_data/external/Circuitscape/Data/PinchPoints/Data/Coyote_Summer_All_Pinchpoints.shp") 
+
+# Load summer coyote pinchpoints
+pp_w<-st_read("1_data/external/Circuitscape/Data/PinchPoints/Data/Coyote_Winter_All_Pinchpoints.shp") 
+
+# load connetivity polygons
+corridors<-st_read("1_data/external/Circuitscape/Vector_Extracted_Corridors/Arboreal_Terrestrial_Connectivity.shp")
+
+#filter cooridors polygons to only include terrestrial connectivity polygons
+#test<-corridors[corridors$ACoyotCor1=="0",]
+```
+
+
+
+
+### clip to study area {-}
+

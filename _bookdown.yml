@@ -1,0 +1,9 @@
+book_filename: "RV_connectivity.Rmd"
+language:
+  ui:
+    chapter_name: ""
+delete_merged_file: true
+output_dir: 4_output/book
+rmd_files: ["index.Rmd"]
+
+
