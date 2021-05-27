@@ -3,8 +3,13 @@
 .RData
 .Ruserdata
 
+
 1_data/
 3_temp/
 4_output/  
 5_test/
 renv/
+images/
+0_documentation/
+3_pipeline/
+rsconnect/

@@ -1,0 +1,145 @@
+
+
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+### Study design {-}
+
+The following details my methods workflow (\@ref(fig:workflowModel)). 
+
+```{r workflowModel, echo=FALSE, fig.cap= "Conceptual model of project workflow", out.width = '70%'}
+knitr::include_graphics("images/rs_workflow_model.png", dpi=600)
+```
+
+
+-------
+
+### Methods outline {-}
+
+1)  Identify relevant layers
+
+    a.  identify constraints on connectivity (variables that may
+        contribute to pinch points (roads, river, slope, etc.)
+
+        i.  base this on criteria used by solstice in developing their
+            resistance map
+
+    b.  group variable into classes
+
+        i.  buildings
+
+        ii. roads
+
+        iii. natural barriers
+
+        iv. human barriers
+
+2)  Prepare spatial covariates
+
+    a.  clip layers to proper extent
+
+    b.  add data to geodatabase
+
+    c.  transform layers to a nonresistant CRS
+
+    d.  reclassify/sort data within layers as needed
+
+    e.  weight data according to ease of management
+
+3)  prepare circuitscape polygons,
+
+    a.  obtain circuitscape polygons representing pinch-points
+
+    b.  assign a numerical identifier to each pinch-point polygon
+
+    c.  join small, clustered polygons together as single features
+
+    d.  create a buffer around each pinch-point polygon
+
+4)  Summarize land cover data within pinch-point polygons
+
+    a.  Methods of summarizing variables will vary according to variable
+        type
+
+        i.  raster extract
+
+        ii. polygon overlay
+
+        iii. proximity analysis
+
+    b.  calculate metrics for each polygon including:
+
+        i.  mean values
+
+            1.  slope
+
+            2.  brightness (light pollution)
+
+            3.  human activity
+
+        ii. proportion of polygon represented by a value
+
+            1.  vegetation (species, type)
+
+            2.  urban infrastructure
+
+                a.  buildings
+
+                b.  parking lots
+
+        iii. distance of feature to pinch-point
+
+             1.  proximity to barriers
+
+                 a.  roads
+
+                 b.  gates
+
+                 c.  river
+
+             2.  trails
+
+        iv. count of features within polygon
+
+            1.  trails
+
+5)  Identify areas best suited for management
+
+    a.  additive weighted overlay model
+
+6)  Visualize polygon characteristics
+
+    a.  multivariate maps
+
+----
+
+### Data Sources {-}
+
+```{r loadcovtables, echo=FALSE}
+library(xlsx)
+data_des<-read.xlsx("0_documentation/data_sources.xlsx", "data")
+
+#cov_description<-read.csv("../tables/covariate_list.csv")
+#names(cov_description)[1]<-"Covariate"
+```
+
+
+```{r dataSources, echo=FALSE, results='asis'}
+library(knitr)
+library(kableExtra)
+
+kable(data_des[c(1,2,4)], col.names = c("Name", "Description", "Path"),"html", align="llr", caption = 'Data used for anaysis') %>%
+  kable_styling(font_size = 10, bootstrap_options= "condensed")%>%
+  row_spec(0, bold=TRUE)%>%
+  column_spec(1, width_min = "10em")%>%
+  column_spec(2, width = "50em")%>%
+  column_spec(3, width_max = "40em")
+
+```
+
+
+
+

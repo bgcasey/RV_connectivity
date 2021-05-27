@@ -13,13 +13,395 @@ pre {
 }
 
 pre[class] {
-  max-height: 500px;
+  max-height: 300px;
 }
 ```
 
 
-### setup {-}
 
-#### load packages {-}
+##### Load packages {-}
 
-#### load spatial data {-}
+```{r eval=F}
+library(sf)
+library(tmap)
+library(RColorBrewer)
+library(raster)
+library(rgdal)
+```
+
+
+### Environmental Sensitivity data {-}
+
+Load environmental Sensitivity data, project to the project crs, and clip to the study area.
+
+#### Load study area{-}
+
+Load study area and other relevant spatial objects created when prepping the pinch-point polygons.
+
+```{r eval=F}
+load("1_data/manual/study_area.rdata")
+
+# load clipped road data
+load("1_data/manual/v_road_clip.rdata")
+
+# load polygon representing North Central Region of Saskatchewan region of the ribbon of green
+load("1_data/manual/nscr.rdata")  
+```
+
+
+#### ACIMS {-}
+
+```{r eval=FALSE}
+ACIMS<-st_read("1_data/external/Environmental_Sensitivity_Data/ACIMS/ACIMS.shp")
+st_crs(ACIMS)
+# NAD83 / Alberta 3TM ref merid 114 W 
+ACIMS_clip<-st_intersection(ACIMS, study_area)
+
+save(ACIMS_clip, file="1_data/manual/ACIMS_clip.rData")
+
+# Visualize layer
+m1<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(ACIMS_clip)+
+    tm_fill(col="SCOMNAME", palette = "Dark2", contrast = c(0.26, 1),alpha = .3, n= nrow(ACIMS_clip), title="Common name")+
+    tm_borders(col = "#636363")+
+  tm_layout(legend.outside = FALSE, legend.text.size = .6, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8)
+m1
+
+tmap_save(m1, "4_output/maps/ACIMS_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "ACIMS layer.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/ACIMS_map.png")
+```
+
+
+#### FWMIS {-}
+
+```{r eval=FALSE}
+FWMIS<-st_read("1_data/external/Environmental_Sensitivity_Data/FWMIS/FWMIS.shp")
+st_crs(FWMIS)
+# NAD83 / Alberta 3TM ref merid 114 W 
+FWMIS_clip<-st_intersection(FWMIS, study_area)
+
+save(FWMIS_clip, file="1_data/manual/FWMIS_clip.rData")
+
+# Visualize layer
+m2<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(FWMIS_clip)+
+    tm_symbols(size=.2, col="#ef3b2c", shape=21)+
+  tm_layout(legend.show=FALSE)
+m2
+
+tmap_save(m2, "4_output/maps/FWMIS_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Locations of FWMIS species surveys.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/FWMIS_map.png")
+```
+
+#### Cultural and historical resources {-}
+
+```{r eval=FALSE}
+CHRP<-st_read("1_data/external/Environmental_Sensitivity_Data/Historical_Resources_Public/AB_Culture_Historic_Resources_Public.shp")
+st_crs(CHRP)
+# NAD83 / Alberta 3TM ref merid 114 W 
+CHRP_clip<-st_intersection(CHRP, study_area)
+
+save(CHRP_clip, file="1_data/manual/CHRP_clip.rData")
+
+
+# Visualize layer
+CHRP_clip$HRV<-as.factor(CHRP_clip$HRV)
+
+m3<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(CHRP_clip)+
+    tm_fill(col="HRV", palette = "Dark2", contrast = c(0.26, 1),alpha = .3, title="Historic Resource Value (HRV)")+
+    tm_borders(col = "#636363")+
+  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
+m3
+
+tmap_save(m3, "4_output/maps/CHRP_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Historic Resource Value (HRV) scores in Edmonton.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/CHRP_map.png")
+```
+
+#### Slope and aspect {-}
+
+
+```{r eval=FALSE}
+##Slope
+
+slope<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Slope_3_8_16_45_RGB.tif")
+slope<-projectRaster(slope, crs=crs(study_area))
+
+slope_clip<-crop(slope, study_area)
+
+save(slope, file="1_data/manual/slope.rData")
+
+m4<-
+  tm_shape(slope_clip)+
+    tm_raster(palette="BuGn",
+              title = "Slope",
+              contrast = c(0,.8))+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m4
+
+tmap_save(m4, "4_output/maps/slope_map.png", outer.margins=c(0,0,0,0))  
+
+
+## Aspect
+
+aspect<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Aspect_RGB_(2).tif")
+aspect<-projectRaster(aspect, crs=crs(study_area))
+
+aspect_clip<-crop(aspect, study_area)
+
+save(aspect, file="1_data/manual/aspect.rData")
+
+m5<-
+  tm_shape(aspect_clip)+
+    tm_raster(palette="Blues",
+              title = "Aspect",
+              contrast = c(0,.8))+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m5
+
+tmap_save(m5, "4_output/maps/aspect_map.png", outer.margins=c(0,0,0,0))
+
+## Slope Range
+
+SlopeRange<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/SlopeRange_1_3_15_30.img")
+SlopeRange<-projectRaster(SlopeRange, crs=crs(study_area))
+
+SlopeRange_clip<-crop(SlopeRange, study_area)
+
+save(SlopeRange, file="1_data/manual/SlopeRange.rData")
+
+m6<-
+  tm_shape(SlopeRange_clip)+
+    tm_raster(palette="Purples",
+              title = "Slope Range",
+              contrast = c(0,.8))+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m6
+
+tmap_save(m6, "4_output/maps/SlopeRange_map.png", outer.margins=c(0,0,0,0)) 
+
+
+SlopeRange_shp<-st_read("1_data/external/Environmental_Sensitivity_Data/Slope/SlopeRange_15_30.shp")
+
+st_crs(SlopeRange_shp)
+# NAD83 / Alberta 3TM ref merid 114 W 
+
+SlopeRange_shp_clip<-st_intersection(st_make_valid(SlopeRange_shp), study_area)
+
+save(SlopeRange_shp_clip, file="1_data/manual/SlopeRange_shp_clip.rData")
+
+SlopeRange_shp_clip$Value<-as.factor(SlopeRange_shp_clip$Value)
+
+m7<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#636363")+
+  tm_shape(SlopeRange_shp_clip)+
+    tm_fill(col="Value", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, title="Slope Range Polygons")+
+    #tm_borders(col = "#636363")
+  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
+m7
+
+tmap_save(m7, "4_output/maps/SlopeRange_shp_map.png", outer.margins=c(0,0,0,0))
+```
+
+```{r echo=FALSE, fig.cap= "Slope.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/slope_map.png")
+```
+
+
+```{r echo=FALSE, fig.cap= "Aspect.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/aspect_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Slope range raster.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/SlopeRange_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Slope range polygons.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/SlopeRange_shp_map.png")
+```
+
+### Parks infrastructure {-}
+
+#### Bridges {-}
+
+```{r eval=FALSE}
+bridges<-st_read("1_data/external/Parks_Infrastructure/Copy_of_Parks_BRIDGES.shp")
+st_crs(bridges)
+bridges<-st_transform(bridges, crs = st_crs(3776))
+
+# NAD83 / Alberta 3TM ref merid 114 W 
+bridges_clip<-st_intersection(bridges, study_area)
+
+save(bridges_clip, file="1_data/manual/bridges_clip.rData")
+
+# Visualize layer
+m8<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(bridges_clip)+
+    tm_symbols(size=.2, col="#ef3b2c", shape=21)+
+  tm_layout(legend.show=FALSE)
+m8
+
+tmap_save(m8, "4_output/maps/bridges_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+
+```{r echo=FALSE, fig.cap= "Bridge locations.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/bridges_map.png")
+```
+
+
+#### Picnic Sites {-}
+
+```{r eval=FALSE}
+
+picnic<-st_read("1_data/external/Parks_Infrastructure/Copy_of_PICNIC_SITES.shp")
+st_crs(picnic)
+picnic<-st_transform(picnic, crs = st_crs(3776))
+
+# NAD83 / Alberta 3TM ref merid 114 W 
+picnic_clip<-st_intersection(picnic, study_area)
+
+save(picnic_clip, file="1_data/manual/picnic_clip.rData")
+
+# Visualize layer
+m9<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(picnic_clip)+
+    tm_symbols(size=.2, col="#ef3b2c", shape=21)+
+  tm_layout(legend.show=FALSE)
+m9
+
+tmap_save(m9, "4_output/maps/picnic_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Picnic sites.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/picnic_map.png")
+```
+
+
+```{r eval=FALSE}
+
+playgrounds<-st_read("1_data/external/Parks_Infrastructure/Copy_of_Playgrounds.shp")
+st_crs(playgrounds)
+playgrounds<-st_transform(playgrounds, crs = st_crs(3776))
+
+# NAD83 / Alberta 3TM ref merid 114 W 
+playgrounds_clip<-st_intersection(playgrounds, study_area)
+
+save(playgrounds_clip, file="1_data/manual/playgrounds_clip.rData")
+
+# Visualize layer
+m10<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(playgrounds_clip)+
+    tm_symbols(size=.2, col="#ef3b2c", shape=21)+
+  tm_layout(legend.show=FALSE)
+m10
+
+tmap_save(m10, "4_output/maps/playgrounds_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Playgrounds sites.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/playgrounds_map.png")
+```
+
+```{r eval=FALSE}
+
+sports_fields<-st_read("1_data/external/Parks_Infrastructure/Copy_of_SPORTS_FIELDS.shp")
+st_crs(sports_fields)
+sports_fields<-st_transform(sports_fields, crs = st_crs(3776))
+st_is_valid(sports_fields)
+x<-st_buffer(sports_fields, .0)
+x=st_geometry(sports_fields)
+
+# NAD83 / Alberta 3TM ref merid 114 W 
+sports_fields_clip<-st_intersection(st_make_valid(sports_fields), study_area)
+SlopeRange_shp_clip<-st_intersection(st_make_valid(SlopeRange_shp), study_area)
+
+save(sports_fields_clip, file="1_data/manual/sports_fields_clip.rData")
+
+# Visualize layer
+m11<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(sports_fields_clip)+
+    tm_symbols(size=.2, col="#ef3b2c", shape=21)+
+  tm_layout(legend.show=FALSE)
+m11
+
+tmap_save(m11, "4_output/maps/sports_fields_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "sports_fields sites.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/sports_fields_map.png")
+```
+

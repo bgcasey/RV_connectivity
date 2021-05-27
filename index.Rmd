@@ -45,6 +45,19 @@ pre[class] {
 }
 ```
 
+## Project plan {-}
+
+```{r child = '0_documentation/project_plan.md'}
+```
+
+
+
+
+## Workflow overview {-}
+```{r child = '2_code/rNotebooks/workflow_overview.Rmd'}
+```
+
+
 
 # Prepare data
 
@@ -53,12 +66,28 @@ pre[class] {
 ```{r child = '2_code/rNotebooks/prep_circuitscape.Rmd'}
 ```
 
-##  Spatial covariates {-}
+##  Biophysical data {-}
 
 ```{r child = '2_code/rNotebooks/prep_spatialCovariates.Rmd'}
 ```
 
+# Calculate Metrics
 
+## Overlay analyses {-}
+
+## Proximity analyses {-}
+
+## Raster analyses {-}
+
+# Compare Pinchpoints 
+
+## Principal Componants Analysis {-}
+
+# Multivariate maps
+
+# Weighted overlay model
+
+# Management recommendations
 
 
 # References
