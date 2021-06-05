@@ -1,0 +1,23 @@
+
+
+```{r loadcovtables, echo=FALSE}
+library(xlsx)
+data_des<-read.xlsx("0_documentation/data_sources.xlsx", "data")
+
+#cov_description<-read.csv("../tables/covariate_list.csv")
+#names(cov_description)[1]<-"Covariate"
+```
+
+
+```{r dataSources, echo=FALSE, results='asis'}
+library(knitr)
+library(kableExtra)
+
+kable(data_des[c(1,2,4)], col.names = c("Name", "Description", "Path"),"html", align="llr", caption = 'Data used for anaysis') %>%
+  kable_styling(font_size = 10, bootstrap_options= "condensed")%>%
+  row_spec(0, bold=TRUE)%>%
+  column_spec(1, width_min = "10em")%>%
+  column_spec(2, width = "50em")%>%
+  column_spec(3, width_max = "40em")
+
+```

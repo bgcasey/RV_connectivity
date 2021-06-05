@@ -106,7 +106,7 @@ tmap_save(m, "4_output/maps/ribbonGreen_map.png", outer.margins=c(0,0,0,0))
 knitr::include_graphics("4_output/maps/ribbonGreen_map.png")
 ```
 
-##### Define study area
+##### Define study area {-}
 
 For this project I focused on the North Central Region of Saskatchewan region of the ribbon of green
 
@@ -133,14 +133,17 @@ yrange <- bbox_new$ymax - bbox_new$ymin # range of y values
 
 study_area<-bbox %>%
   st_as_sf()
-save(study_area, file="1_data/manual/study_area.rdata")  
-  
+save(study_area, file="1_data/manual/study_area.rdata") 
+# save as study area polygon as shapefile
+st_write(study_area, dsn = "4_output/shapefiles/", layer = "study_area.shp", driver = "ESRI Shapefile")
+
+
 # crop roads file by a bounding box of the north saskatchewan central region polygon
 v_road_2<-st_crop(v_road, study_area)
 
 # save clipped road data
 v_road_clip<-v_road_2
-save(study_area, file="1_data/manual/v_road_clip.rdata")  
+save(v_road_clip, file="1_data/manual/v_road_clip.rdata")  
 
 
 tmap_mode("plot")
@@ -174,13 +177,19 @@ pp_w<-st_read("1_data/external/Circuitscape/Data/PinchPoints/Data/Coyote_Winter_
   st_buffer(dist=0)
 
 # load connetivity polygons
-corridors<-st_read("1_data/external/Circuitscape/Vector_Extracted_Corridors/Arboreal_Terrestrial_Connectivity.shp") %>% 
+corridors<-st_read("1_data/external/Circuitscape/Vector_Extracted_Corridors/TerrestrialCorridor/TerrestrialCorridor.shp") %>% 
   st_buffer(dist=0)
+
+corridors<-st_transform(corridors, crs = st_crs(3776))
+
+
+
 
 #filter cooridors polygons to only include terrestrial connectivity polygons
 #test<-corridors[corridors$ACoyotCor1=="0",]
 ```
 
+---
 
 ### Clip to study area {-}
 
@@ -266,10 +275,33 @@ knitr::include_graphics("4_output/maps/pp_w_map.png")
 knitr::include_graphics("4_output/maps/pp_s_map.png")
 ```
 
+---
+
 ### Cluster pinch-points {-}
 
 There are groups of pinch points very close to each other. This will lead to significant overlap in buffers. Since neighboring pinch-points will likely be caused by similar biophysical features, I decided to group neighboring pinch-points. Below, polygons are clustered based on a user defined threshold. I chose a 50 m threshold.
 
+
+#### Filter out small pinch-point polygons {-}
+
+```{r eval=FALSE}
+x<-pp_s_clip
+
+#calculate the are of each polygon
+x$area <- st_area(x)
+
+# filter out polygons based on minimum area
+## set min area (m^2)
+m<-5000
+
+library(units) #use this package to convert the threshold value to a units object
+m=set_units(m, m^2)
+f<-x$area>m
+x_f=x[f,]
+
+```
+
+#### Cluster remaining polygons by proximity {-}
 
 ```{r eval=FALSE}
 
@@ -291,14 +323,14 @@ clusterSF <- function(sfpolys, thresh){
 }
 
 #set a distance threshold to group polygons
-t<-50
+t<-25
 
-library(units) #use this package to convert the threshold value to a units object
-pp_s_clip_clus<-clusterSF(pp_s_clip, set_units(t, m))
+
+pp_s_clip_clus<-clusterSF(x_f, set_units(t, m))
 
 save(pp_s_clip_clus, file="3_pipeline/tmp/pp_s_clip_clus.rData")
 
-## plot clustered pinchpoints
+## plot clustered pinch-points
 tmap_mode("plot")
 
 m5<-
@@ -308,7 +340,7 @@ m5<-
     tm_fill(col="white", alpha=.4)+
     tm_borders(col = "#636363")+
   tm_shape(pp_s_clip_clus)+
-    tm_fill(col="group", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, n= nrow(pp_s_clip_clus), legend.show = FALSE)+
+    tm_fill(col="MAP_COLORS", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, n= nrow(pp_s_clip_clus), legend.show = FALSE)+
   tm_borders(col = "#636363")
 m5
 
@@ -319,7 +351,7 @@ tmap_save(m5, "4_output/maps/pp_s_clus_map.png", asp=0, outer.margins=c(0,0,0,0)
 knitr::include_graphics("4_output/maps/pp_s_clus_map.png")
 ```
 
-
+---
 
 ### Buffer pinch-points {-}
 
@@ -332,7 +364,6 @@ pp_s_clip_clus_buf<-st_buffer(pp_s_clip_clus, dist= 30, singleSide = TRUE,  endC
 save(pp_s_clip_clus_buf, file="3_pipeline/store/pp_s_clip_clus_buf.rData")
 
 ## plot buffered clusters
-tmap_mode("plot")
 
 m6<-
   tm_shape(v_road_3)+tm_lines(col="white")+
@@ -341,7 +372,7 @@ m6<-
     tm_fill(col="white", alpha=.4)+
     tm_borders(col = "#636363")+
   tm_shape(pp_s_clip_clus_buf)+
-    tm_fill(col="group", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, n= nrow(pp_s_clip_clus), legend.show = FALSE)+
+    tm_fill(col="MAP_COLORS", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, n= nrow(pp_s_clip_clus), legend.show = FALSE)+
   tm_borders(col = "#636363")
 m6
 
@@ -351,5 +382,118 @@ tmap_save(m6, "4_output/maps/pp_s_clus_buf_map.png", asp=0, outer.margins=c(0,0,
 
 ```{r echo=FALSE, fig.cap= "Clusters of pinch-points with a 30m buffer.", out.width = '100%'}
 knitr::include_graphics("4_output/maps/pp_s_clus_buf_map.png")
+```
+
+
+#### Exterior only buffer {-}
+
+```{r eval=FALSE}
+pp_s_clip_clus_buf_ext<-st_buffer(st_boundary(pp_s_clip_clus), dist= 30, singleSide = TRUE,  endCapStyle = "ROUND",
+  joinStyle = "ROUND")
+
+save(pp_s_clip_clus_buf_ext, file="3_pipeline/store/pp_s_clip_clus_buf_ext.rData")
+
+## plot buffered clusters
+
+m7<-
+  tm_shape(v_road_3)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus_buf_ext)+
+    tm_fill(col="MAP_COLORS", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, n= nrow(pp_s_clip_clus), legend.show = FALSE)+
+  tm_borders(col = "#636363")
+m7
+
+tmap_save(m7, "4_output/maps/pp_s_clus_buf_ext_map.png", asp=0, outer.margins=c(0,0,0,0))
+```
+
+
+```{r echo=FALSE, fig.cap= "Clusters of pinch-points with a 30m exterior buffer.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/pp_s_clus_buf_ext_map.png")
+```
+
+---
+
+### Current map {-}
+
+Load and clip the terrestrial circuitscape current map.
+
+#### Summer coyote {-}
+
+``` {r eval=FALSE}
+
+cur_map_sum<-raster("1_data/external/Circuitscape/Map/Coyote_Summer_All_curmap.tif")
+
+projectRaster(cur_map_sum, crs=st_crs(study_area))
+
+cur_map_sum_clip<-crop(cur_map_sum, study_area)
+
+save(cur_map_sum_clip, file="1_data/manual/cur_map_sum_clip.rData")
+
+m8<-
+  tm_shape(cur_map_sum_clip)+
+    tm_raster(palette="-RdBu",
+              title = "Current",
+              style="cont",
+              drop.levels = TRUE,
+              contrast = c(0,1)
+              )+
+  tm_layout(legend.show = FALSE,
+            legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m8
+
+tmap_save(m8, "4_output/maps/cur_map_sum_map.png", outer.margins=c(0,0,0,0)) 
+
+```
+
+```{r echo=FALSE, fig.cap= "Summer coyote current map.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cur_map_sum_map.png")
+```
+
+
+#### Winter coyote {-}
+
+``` {r eval=FALSE}
+
+cur_map_win<-raster("1_data/external/Circuitscape/Map/Coyote_Winter_All_curmap.tif")
+
+projectRaster(cur_map_win, crs=crs(study_area))
+
+cur_map_win_clip<-crop(cur_map_win, study_area)
+
+save(cur_map_win_clip, file="1_data/manual/cur_map_win_clip.rData")
+
+
+m9<-
+  tm_shape(cur_map_win_clip)+
+    tm_raster(palette="-RdBu",
+              title = "Current",
+              style="cont",
+              contrast = c(0,1),
+              )+
+  tm_layout(legend.show = FALSE,
+            legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m9
+
+tmap_save(m9, "4_output/maps/cur_map_win_map.png", outer.margins=c(0,0,0,0)) 
+
+```
+
+```{r echo=FALSE, fig.cap= "Winter coyote current map.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cur_map_win_map.png")
 ```
 

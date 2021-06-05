@@ -7,6 +7,9 @@ output:
     bookdown::gitbook:
       split_by: "section"
       split_bib: no
+   
+    
+      
 bibliography: references/library.bib
 citation-style: references/nature.csl
 documentclass: book
@@ -57,7 +60,9 @@ pre[class] {
 ```{r child = '2_code/rNotebooks/workflow_overview.Rmd'}
 ```
 
-
+## Data sources {-}
+```{r child = '2_code/rNotebooks/dataSources.Rmd'}
+```
 
 # Prepare data
 
@@ -78,6 +83,10 @@ pre[class] {
 ## Proximity analyses {-}
 
 ## Raster analyses {-}
+
+```{r child = '2_code/rNotebooks/rasterAnalysis.Rmd'}
+```
+
 
 # Compare Pinchpoints 
 

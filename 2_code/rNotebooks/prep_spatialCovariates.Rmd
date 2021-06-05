@@ -30,10 +30,6 @@ library(rgdal)
 ```
 
 
-### Environmental Sensitivity data {-}
-
-Load environmental Sensitivity data, project to the project crs, and clip to the study area.
-
 #### Load study area{-}
 
 Load study area and other relevant spatial objects created when prepping the pinch-point polygons.
@@ -48,6 +44,10 @@ load("1_data/manual/v_road_clip.rdata")
 load("1_data/manual/nscr.rdata")  
 ```
 
+
+### Habitat data {-}
+
+Load environmental Sensitivity data, project to the project crs, and clip to the study area.
 
 #### ACIMS {-}
 
@@ -80,6 +80,22 @@ tmap_save(m1, "4_output/maps/ACIMS_map.png", outer.margins=c(0,0,0,0))
 knitr::include_graphics("4_output/maps/ACIMS_map.png")
 ```
 
+##### Attributes {-}
+
+```{r  echo=FALSE, results='asis'}
+library(knitr)
+library(kableExtra)
+
+load("1_data/manual/ACIMS_clip.rData")
+
+knitr::kable(head(ACIMS_clip[-c(11)]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
 
 #### FWMIS {-}
 
@@ -111,46 +127,78 @@ tmap_save(m2, "4_output/maps/FWMIS_map.png", outer.margins=c(0,0,0,0))
 knitr::include_graphics("4_output/maps/FWMIS_map.png")
 ```
 
-#### Cultural and historical resources {-}
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/FWMIS_clip.rData")
+
+knitr::kable(head(FWMIS_clip[-c(25)]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+#### Edmonton sampling plots {-}
+
 
 ```{r eval=FALSE}
-CHRP<-st_read("1_data/external/Environmental_Sensitivity_Data/Historical_Resources_Public/AB_Culture_Historic_Resources_Public.shp")
-st_crs(CHRP)
-# NAD83 / Alberta 3TM ref merid 114 W 
-CHRP_clip<-st_intersection(CHRP, study_area)
 
-save(CHRP_clip, file="1_data/manual/CHRP_clip.rData")
+tsp_psp<-st_read("1_data/external/TSP_PSP_Access_Database/PLOT_LOCATIONS_PLS_DATA_3TM.shp")
+st_crs(tsp_psp)
+
+#clip to study area 
+tsp_psp_clip<-st_intersection(tsp_psp, study_area)
+
+save(tsp_psp_clip, file="1_data/manual/tsp_psp_clip.rData")
+
+# look at attributes
+tsp_psp_tbl<-head(as.data.frame(tsp_psp_clip))
+save(tsp_psp_tbl, file="images/tables/tsp_psp_tbl.rData")
 
 
 # Visualize layer
-CHRP_clip$HRV<-as.factor(CHRP_clip$HRV)
-
-m3<-
-  tm_shape(v_road_clip)+tm_lines(col="white")+
+m16<-
+tm_shape(v_road_clip)+tm_lines(col="white")+
   tm_layout(bg.col="#d9d9d9")+
   tm_shape(nscr)+
     tm_fill(col="white", alpha=.4)+
     tm_borders(col = "#636363")+
-  tm_shape(CHRP_clip)+
-    tm_fill(col="HRV", palette = "Dark2", contrast = c(0.26, 1),alpha = .3, title="Historic Resource Value (HRV)")+
-    tm_borders(col = "#636363")+
-  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
-m3
+  tm_shape(tsp_psp_clip)+
+    tm_symbols(size=.2, col="#ef3b2c", shape=21)+
+  tm_layout(legend.show=FALSE)
+m16
 
-tmap_save(m3, "4_output/maps/CHRP_map.png", outer.margins=c(0,0,0,0))  
+tmap_save(m16, "4_output/maps/tsp_psp_map.png", outer.margins=c(0,0,0,0))  
   
 ```
 
-```{r echo=FALSE, fig.cap= "Historic Resource Value (HRV) scores in Edmonton.", out.width = '100%'}
-knitr::include_graphics("4_output/maps/CHRP_map.png")
+```{r echo=FALSE, fig.cap= "Edmonton sample plot locations.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/tsp_psp_map.png")
 ```
 
-#### Slope and aspect {-}
+##### Attributes {-}
 
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/tsp_psp_clip.rData")
+
+knitr::kable(head(tsp_psp_clip), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+--- 
+
+### Slope and aspect {-}
+
+#### Slope {-}
 
 ```{r eval=FALSE}
-##Slope
-
 slope<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Slope_3_8_16_45_RGB.tif")
 slope<-projectRaster(slope, crs=crs(study_area))
 
@@ -174,8 +222,15 @@ m4
 
 tmap_save(m4, "4_output/maps/slope_map.png", outer.margins=c(0,0,0,0))  
 
+```
 
-## Aspect
+```{r echo=FALSE, fig.cap= "Slope.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/slope_map.png")
+```
+
+#### Aspect {-}
+
+``` {r eval=FALSE}
 
 aspect<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Aspect_RGB_(2).tif")
 aspect<-projectRaster(aspect, crs=crs(study_area))
@@ -200,8 +255,16 @@ m5
 
 tmap_save(m5, "4_output/maps/aspect_map.png", outer.margins=c(0,0,0,0))
 
-## Slope Range
+```
 
+```{r echo=FALSE, fig.cap= "Aspect.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/aspect_map.png")
+```
+
+
+#### Slope range {-}
+
+``` {r eval=FALSE}
 SlopeRange<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/SlopeRange_1_3_15_30.img")
 SlopeRange<-projectRaster(SlopeRange, crs=crs(study_area))
 
@@ -225,6 +288,7 @@ m6
 
 tmap_save(m6, "4_output/maps/SlopeRange_map.png", outer.margins=c(0,0,0,0)) 
 
+## polygons
 
 SlopeRange_shp<-st_read("1_data/external/Environmental_Sensitivity_Data/Slope/SlopeRange_15_30.shp")
 
@@ -252,14 +316,6 @@ m7
 tmap_save(m7, "4_output/maps/SlopeRange_shp_map.png", outer.margins=c(0,0,0,0))
 ```
 
-```{r echo=FALSE, fig.cap= "Slope.", out.width = '100%'}
-knitr::include_graphics("4_output/maps/slope_map.png")
-```
-
-
-```{r echo=FALSE, fig.cap= "Aspect.", out.width = '100%'}
-knitr::include_graphics("4_output/maps/aspect_map.png")
-```
 
 ```{r echo=FALSE, fig.cap= "Slope range raster.", out.width = '100%'}
 knitr::include_graphics("4_output/maps/SlopeRange_map.png")
@@ -268,6 +324,270 @@ knitr::include_graphics("4_output/maps/SlopeRange_map.png")
 ```{r echo=FALSE, fig.cap= "Slope range polygons.", out.width = '100%'}
 knitr::include_graphics("4_output/maps/SlopeRange_shp_map.png")
 ```
+
+----
+
+
+### Canopy {-}
+
+#### Natural {-}
+
+```{r eval=FALSE}
+
+can_natural<-raster("1_data/external/Canopy_Cover_2020/All_Classes_Natural.tif")
+st_crs(can_natural)
+
+can_natural_clip<-crop(can_natural, study_area)
+
+save(can_natural_clip, file="1_data/manual/can_natural_clip.rData")
+
+m18<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#f0f0f0")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#969696")+
+  tm_shape(can_natural_clip)+
+    tm_raster(palette="Greens",
+              style = "cont",
+              title = "Natural canopy height",
+              contrast = c(.1,1))+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m18
+
+tmap_save(m18, "4_output/maps/can_natural_map.png", outer.margins=c(0,0,0,0))  
+
+```
+
+```{r echo=FALSE, fig.cap= "Natural canopy.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/can_natural_map.png")
+```
+
+
+#### Naturalized {-}
+
+``` {r eval=FALSE}
+
+can_naturalized<-raster("1_data/external/Canopy_Cover_2020/All_Classes_Naturalized.tif")
+st_crs(can_naturalized)
+
+can_naturalized_clip<-crop(can_naturalized, study_area)
+
+save(can_naturalized_clip, file="1_data/manual/can_naturalized_clip.rData")
+
+m19<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#f0f0f0")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#969696")+
+  tm_shape(can_naturalized_clip)+
+    tm_raster(palette="Greens",
+              title = "Naturalized canopy height",
+              style = "cont",
+              contrast = c(.1 ,1),
+              )+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m19
+
+tmap_save(m19, "4_output/maps/can_naturalized_map.png", outer.margins=c(0,0,0,0))
+
+```
+
+```{r echo=FALSE, fig.cap= "Naturalized canopy.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/can_naturalized_map.png")
+```
+
+#### Ornamental {-}
+
+``` {r eval=FALSE}
+
+can_ornamental<-raster("1_data/external/Canopy_Cover_2020/All_Classes_Ornamental.tif")
+st_crs(can_ornamental)
+
+can_ornamental_clip<-crop(can_ornamental, study_area)
+
+save(can_ornamental_clip, file="1_data/manual/can_ornamental_clip.rData")
+
+
+m20<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#f0f0f0")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#969696")+
+  tm_shape(can_ornamental_clip)+
+    tm_raster(palette="Greens",
+              title = "Ornamental canopy height",
+              style="cont",
+              contrast = c(.1,1)
+              )+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m20
+
+tmap_save(m20, "4_output/maps/can_ornamental_map.png", outer.margins=c(0,0,0,0)) 
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Ornamental canopy.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/can_natural_map.png")
+```
+
+
+#### Canopy polygons {-}
+
+``` {r eval=FALSE}
+#  see layers in ESRI geodatabase
+
+l<-st_layers(dsn="1_data/external/Canopy_Cover_2020/PolygonData.gdb")
+l
+
+can_poly<-st_read(dsn="1_data/external/Canopy_Cover_2020/PolygonData.gdb", layer="All_Polygons",options=list("METHOD=SKIP"))
+
+st_crs(can_poly)
+# NAD83 / Alberta 3TM ref merid 114 W 
+
+
+# there are some invalid geometries in this spatial layer.
+# identify invalid geometries:
+valid<-st_is_valid(can_poly)
+
+#fix by by buffering geometries:
+can_poly_2<-st_buffer(can_poly[!is.na(valid),], 0.0)
+
+
+can_poly_clip<-st_intersection(st_make_valid(can_poly2), study_area)
+
+save(can_poly_clip, file="1_data/manual/can_poly_clip.rData")
+
+m21<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#636363")+
+  tm_shape(can_poly_clip)+
+    tm_fill(col="Value", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, title="Slope Range Polygons")+
+    #tm_borders(col = "#636363")
+  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
+m21
+
+tmap_save(m21, "4_output/maps/can_poly_map.png", outer.margins=c(0,0,0,0))
+```
+
+```{r echo=FALSE, fig.cap= "Canopy polygons.", out.width = '100%'}
+#knitr::include_graphics("4_output/maps/can_poly_map.png")
+```
+
+
+---
+
+
+### uPLVI {-}
+
+``` {r eval=FALSE}
+UPLVI<-st_read("1_data/external/2018_uPLVI/COE_2018_uPLVI_RES_UPDATE_DRAFTv3.shp")
+
+st_crs(UPLVI)
+
+UPLVI_clip<-st_intersection(st_make_valid(UPLVI), study_area)
+
+save(UPLVI_clip, file="1_data/manual/UPLVI_clip.rData")
+
+#UPLVI_clip$Value<-as.factor(UPLVI_clip$Value)
+
+m17<-
+  tm_shape(UPLVI_clip)+
+    tm_fill(col="LANDCLAS1", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, title="Land Classification", labels = c("Developed","Modified", "Natural", "Naturally Wooded", "Naturally Non-Wooded"))+
+  tm_shape(v_road_clip)+tm_lines(col="white", lwd=1)+
+  #tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#636363")+
+    #tm_borders(col = "#636363")
+  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
+m17
+
+tmap_save(m17, "4_output/maps/UPLVI_map.png", outer.margins=c(0,0,0,0))
+
+```
+
+```{r echo=FALSE, fig.cap= "Urban Primary Land and Vegetation Inventory (uPLVI).", out.width = '100%'}
+knitr::include_graphics("4_output/maps/UPLVI_map.png")
+```
+
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/UPLVI_clip.rData")
+
+knitr::kable(head(UPLVI_clip[-c(ncol(UPLVI_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+```
+
+---
+
+### DEM {-}
+
+``` {r eval=FALSE}
+
+DEM<-raster("1_data/external/CoE_DEM_2019/Edmonton_05m.tif")
+st_crs(DEM)
+
+DEM_clip<-crop(DEM, study_area)
+
+save(DEM_clip, file="1_data/manual/DEM_clip.rData")
+
+
+m22<-
+  tm_shape(DEM_clip)+
+    tm_raster(palette="YlOrBr",
+              title = "DEM",
+              style="cont",
+              drop.levels = TRUE,
+              contrast = c(0,1),
+              alpha = .9
+              )+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m22
+
+tmap_save(m22, "4_output/maps/DEM_map.png", outer.margins=c(0,0,0,0)) 
+
+```
+
+```{r echo=FALSE, fig.cap= "Digital elevation model.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/DEM_map.png")
+```
+
+---
 
 ### Parks infrastructure {-}
 
@@ -305,6 +625,21 @@ knitr::include_graphics("4_output/maps/bridges_map.png")
 ```
 
 
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/bridges_clip.rData")
+
+knitr::kable(head(bridges_clip), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+
 #### Picnic Sites {-}
 
 ```{r eval=FALSE}
@@ -338,6 +673,21 @@ tmap_save(m9, "4_output/maps/picnic_map.png", outer.margins=c(0,0,0,0))
 knitr::include_graphics("4_output/maps/picnic_map.png")
 ```
 
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/picnic_clip.rData")
+
+knitr::kable(head(picnic_clip[-c(ncol(picnic_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+#### Playgrounds {-}
 
 ```{r eval=FALSE}
 
@@ -370,20 +720,41 @@ tmap_save(m10, "4_output/maps/playgrounds_map.png", outer.margins=c(0,0,0,0))
 knitr::include_graphics("4_output/maps/playgrounds_map.png")
 ```
 
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/playgrounds_clip.rData")
+
+knitr::kable(head(playgrounds_clip[-c(ncol(playgrounds_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+
+#### Sports fields {-}
+
 ```{r eval=FALSE}
 
 sports_fields<-st_read("1_data/external/Parks_Infrastructure/Copy_of_SPORTS_FIELDS.shp")
 st_crs(sports_fields)
 sports_fields<-st_transform(sports_fields, crs = st_crs(3776))
-st_is_valid(sports_fields)
-x<-st_buffer(sports_fields, .0)
-x=st_geometry(sports_fields)
 
-# NAD83 / Alberta 3TM ref merid 114 W 
-sports_fields_clip<-st_intersection(st_make_valid(sports_fields), study_area)
-SlopeRange_shp_clip<-st_intersection(st_make_valid(SlopeRange_shp), study_area)
+# there are some invalid geometries in this spatial layer.
+# identify invalid geometries:
+valid<-st_is_valid(sports_fields)
+
+#fix by by buffering geometries:
+sports_fields<-st_buffer(sports_fields[!is.na(valid),], 0.0)
+
+#clip to study area 
+sports_fields_clip<-st_intersection(sports_fields, study_area)
 
 save(sports_fields_clip, file="1_data/manual/sports_fields_clip.rData")
+
 
 # Visualize layer
 m11<-
@@ -393,7 +764,8 @@ m11<-
     tm_fill(col="white", alpha=.4)+
     tm_borders(col = "#636363")+
   tm_shape(sports_fields_clip)+
-    tm_symbols(size=.2, col="#ef3b2c", shape=21)+
+    tm_fill(col="#2ca25f")+
+    #tm_symbols(size=.2, col="#ef3b2c", shape=21)+
   tm_layout(legend.show=FALSE)
 m11
 
@@ -401,7 +773,294 @@ tmap_save(m11, "4_output/maps/sports_fields_map.png", outer.margins=c(0,0,0,0))
   
 ```
 
-```{r echo=FALSE, fig.cap= "sports_fields sites.", out.width = '100%'}
+```{r echo=FALSE, fig.cap= "Sports fields in Edmonton.", out.width = '100%'}
 knitr::include_graphics("4_output/maps/sports_fields_map.png")
+```
+
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/sports_fields_clip.rData")
+
+knitr::kable(head(sports_fields_clip[-c(ncol(sports_fields_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+#### Stairs {-}
+
+
+```{r eval=FALSE}
+
+stairs<-st_read("1_data/external/Parks_Infrastructure/Copy_of_STAIRS.shp")
+st_crs(stairs)
+stairs<-st_transform(stairs, crs = st_crs(3776))
+
+#clip to study area 
+stairs_clip<-st_intersection(stairs, study_area)
+
+save(stairs_clip, file="1_data/manual/stairs_clip.rData")
+
+
+# Visualize layer
+m12<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(stairs_clip)+
+    #tm_fill(col="#2ca25f")+
+    tm_lines(col="#ef3b2c",
+            lwd=6)+
+  tm_layout(legend.show=FALSE)
+m12
+
+tmap_save(m12, "4_output/maps/stairs_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Stairs in Edmonton.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/stairs_map.png")
+```
+
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/stairs_clip.rData")
+
+knitr::kable(head(stairs_clip[-c(ncol(stairs_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+#### Trails {-}
+
+```{r eval=FALSE}
+
+trails<-st_read("1_data/external/Trails/Copy_of_TRAILS.shp")
+st_crs(trails)
+trails<-st_transform(trails, crs = st_crs(3776))
+
+#clip to study area 
+trails_clip<-st_intersection(trails, study_area)
+
+save(trails_clip, file="1_data/manual/trails_clip.rData")
+
+
+# Visualize layer
+m15<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+  tm_shape(trails_clip)+
+  tm_lines(col="SURFACE_TY",
+           palette="Dark2",
+           contrast=c(0, 1),
+           title.col = "Surface type")+
+  tm_layout(
+            legend.outside = FALSE, 
+            legend.text.size = .6, 
+            legend.bg.color="white", 
+            legend.frame=TRUE, 
+            legend.frame.lwd=.8)
+
+m15
+
+tmap_save(m15, "4_output/maps/trails_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Map of trails in Edmonton by surface type.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/trails_map.png")
+```
+
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/trails_clip.rData")
+
+knitr::kable(head(trails_clip[-c(ncol(trails_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+
+---
+
+### Roads data {-}
+
+
+#### Road width and speed {-}
+
+```{r eval=FALSE}
+
+road_ws<-st_read("1_data/external/roads_data/Road_Width_and_Speed/Road_Width_and_Speed.shp")
+st_crs(road_ws)
+road_ws<-st_transform(road_ws, crs = st_crs(3776))
+
+#clip to study area 
+road_ws_clip<-st_intersection(road_ws, study_area)
+
+save(road_ws_clip, file="1_data/manual/road_ws_clip.rData")
+
+
+# Visualize layer
+m13<-
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+  tm_shape(road_ws_clip)+
+  tm_lines(col="SPEED",
+           palette="Greys",
+           contrast=c(0,1),
+           title.col="Road speed limit")+
+  tm_layout(bg.col="#d9d9d9",
+            legend.outside = FALSE, 
+            legend.text.size = .6, 
+            legend.bg.color="white", 
+            legend.frame=TRUE, 
+            legend.frame.lwd=.8)
+
+m13
+
+tmap_save(m13, "4_output/maps/road_ws_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+
+```{r echo=FALSE, fig.cap= "Edmonton roads colored according to speed limit.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/road_ws_map.png")
+```
+
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/road_ws_clip.rData")
+
+knitr::kable(head(road_ws_clip[-c(ncol(road_ws_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+
+#### Curb lines {-}
+
+```{r eval=FALSE}
+
+curbs<-st_read("1_data/external/roads_data/Curb_lines/Copy_of_CURB_LINEWORK.shp")
+st_crs(curbs)
+curbs<-st_transform(curbs, crs = st_crs(3776))
+
+
+#clip to study area 
+curbs_clip<-st_intersection(curbs, study_area)
+
+save(curbs_clip, file="1_data/manual/curbs_clip.rData")
+
+
+# Visualize layer
+m14<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+  tm_shape(curbs_clip)+
+  tm_lines(col="TYPE",
+           palette="Greys",
+           contrast=c(.5, 1),
+           title.col="Curb type")+
+  tm_layout(
+            legend.outside = FALSE, 
+            legend.text.size = .6, 
+            legend.bg.color="white", 
+            legend.frame=TRUE, 
+            legend.frame.lwd=.8)
+
+m14
+
+tmap_save(m14, "4_output/maps/curbs_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Map of curbs in Edmonton by type.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/curbs_map.png")
+```
+
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/curbs_clip.rData")
+
+knitr::kable(head(curbs_clip[-c(ncol(curbs_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
+```
+
+---
+
+### Cultural and historical resources {-}
+
+```{r eval=FALSE}
+CHRP<-st_read("1_data/external/Environmental_Sensitivity_Data/Historical_Resources_Public/AB_Culture_Historic_Resources_Public.shp")
+st_crs(CHRP)
+# NAD83 / Alberta 3TM ref merid 114 W 
+CHRP_clip<-st_intersection(CHRP, study_area)
+
+save(CHRP_clip, file="1_data/manual/CHRP_clip.rData")
+
+
+# Visualize layer
+CHRP_clip$HRV<-as.factor(CHRP_clip$HRV)
+
+m3<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(CHRP_clip)+
+    tm_fill(col="HRV", palette = "Dark2", contrast = c(0.26, 1),alpha = .3, title="Historic Resource Value (HRV)")+
+    tm_borders(col = "#636363")+
+  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
+m3
+
+tmap_save(m3, "4_output/maps/CHRP_map.png", outer.margins=c(0,0,0,0))  
+  
+```
+
+```{r echo=FALSE, fig.cap= "Historic Resource Value (HRV) scores in Edmonton.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/CHRP_map.png")
+```
+
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/CHRP_clip.rData")
+
+knitr::kable(head(CHRP_clip[-c(ncol(CHRP_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+
 ```
 
