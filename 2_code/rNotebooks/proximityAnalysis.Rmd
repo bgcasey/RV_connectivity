@@ -1,0 +1,647 @@
+
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 500px;
+}
+```
+
+```{r eval=FALSE}
+library(sf)
+library(dplyr)
+library(raster)
+library(tmap)
+library(ggplot2)
+library(gridExtra)
+library(scales)
+
+```
+
+### Load data {-}
+
+#### Biophisical data {-}
+
+Load prepared and clipped biophysical layers.
+
+```{r eval=FALSE}
+# curbs
+load("1_data/manual/curbs_clip.rData")
+
+# trails
+load("1_data/manual/trails_clip.rData")
+
+# roads
+load("1_data/manual/road_ws_clip.rData")
+
+```
+
+#### Pinch-points {-}
+
+Load buffered pinch-point polygons
+
+```{r eval=FALSE}
+
+# buffered pinch point polygons
+load("3_pipeline/store/pp_s_clip_clus_buf_ext.rData")
+
+# pinch point clusters
+load("3_pipeline/tmp/pp_s_clip_clus.rData")
+
+#calculate area of pinch point polygons
+pp_s_clip_clus$pp_area<-st_area(pp_s_clip_clus)
+
+# buffered pinchpoints
+load("3_pipeline/store/pp_s_clip_clus_buf.rData")
+```
+
+#### Base layers {-}
+
+Load baselayers to be used for visualization maps.
+
+```{r eval=FALSE}
+
+# roads
+load("1_data/manual/v_road_clip.rdata")
+
+# load polygon representing North Central Region of Saskatchewan region of the ribbon of green
+load("1_data/manual/nscr.rdata") 
+```
+
+
+### Roads {-}
+
+```{r eval=FALSE}
+#transform pinch-point polygon shape to line
+pp_s_clip_clus_boundary <- st_cast(pp_s_clip_clus,"MULTILINESTRING")
+
+dist<-st_distance(pp_s_clip_clus_boundary, road_ws_clip)
+n<-nearest(dist)
+
+# ddmin <- apply(d, 2, min)
+# x<-pp_s_clip_clus
+# x$roadDist<-dmin
+
+#create a data.frame with the distance and the coordinates of the points
+df <- data.frame(dist=as.vector(dist)/1000,
+                    st_coordinates(road_ws_clip))
+df<-data.frame(dist)
+#structure
+str(df)
+## 'data.frame':    4104 obs. of  3 variables:
+##  $ dist: num  0.791 1.151 1.271 3.129 2.429 ...
+##  $ X   : num  608796 613796 583796 588796 593796 ...
+##  $ Y   : num  7033371 7033371 7038371 7038371 7038371 ...
+#colors 
+
+
+col_dist <- brewer.pal(11,"RdGy")
+
+
+ggplot(df,aes(X,Y,fill=dist)) #variables
+         geom_tile()+ #geometry
+           scale_fill_gradientn(colours=rev(col_dist))+ #colors for plotting the distance
+             labs(fill="Distance (km)")+ #legend name
+             theme_void()+ #map theme
+              theme(legend.position = "bottom") #legend position
+```
+
+#### Total length of roads in pinch-points{-}
+
+```{r eval=FALSE}
+
+########## just in buffer ############
+polys_buf<-pp_s_clip_clus_buf_ext
+
+int_buf = st_intersection(road_ws_clip, polys_buf)
+
+plot(polys_buf$geom)
+plot(int_buf$geom, lwd = 2, add = TRUE)
+
+#Get the total length of road within each polygon. (polygons with no lines are missing from list)
+road_tot_buf<-tapply(st_length(int_buf), int_buf$ID.1,sum)
+
+polys_buf$road_tot_buf = rep(0,nrow(polys_buf))
+polys_buf$road_tot_buf[match(names(road_tot_buf),polys_buf$ID)] = road_tot_buf
+
+plot(polys_buf[,"road_tot_buf"])
+save(polys_buf, file = "3_pipeline/tmp/polys_buf.rData")
+
+
+########## just in pinch-point cluster ############
+polys_pp<-pp_s_clip_clus
+
+int_pp = st_intersection(road_ws_clip, polys_pp)
+
+plot(polys_pp$geom)
+plot(int_pp$geom, lwd = 2, add = TRUE)
+
+#Get the total length of road within each polygon. (polygons with no lines are missing from list)
+road_tot_pp<-tapply(st_length(int_pp), int_pp$group,sum)
+
+polys_pp$road_tot_pp = rep(0,nrow(polys_pp))
+polys_pp$road_tot_pp[match(names(road_tot_pp),polys_pp$group)] = road_tot_pp
+
+plot(polys_pp[,"road_tot_pp"])
+save(polys_pp, file = "3_pipeline/tmp/polys_pp.rData")
+
+
+########## pp and buffer ############
+polys_pp_buf<-pp_s_clip_clus_buf
+
+int_pp_buf = st_intersection(road_ws_clip, polys_pp_buf)
+
+plot(polys_pp_buf$geom)
+plot(int_pp_buf$geom, lwd = 2, add = TRUE)
+
+#Get the total length of road within each polygon. (polygons with no lines are missing from list)
+road_tot_pp_buf<-tapply(st_length(int_pp_buf), int_pp_buf$group,sum)
+
+polys_pp_buf$road_tot_pp_buf = rep(0,nrow(polys_pp_buf))
+polys_pp_buf$road_tot_pp_buf[match(names(road_tot_pp_buf),polys_pp_buf$group)] = road_tot_pp_buf
+
+plot(polys_pp_buf[,"road_tot_pp_buf"])
+
+save(polys_pp_buf, file = "3_pipeline/tmp/polys_pp_buf.rData")
+
+road_tot<-cbind(polys_pp, polys_buf, polys_pp_buf)
+
+road_tot<-road_tot[-c(2,4, 5,7)] #trail_tot<-trail_tot[-c(2,4, 5,7)]
+
+
+save(road_tot,file="3_pipeline/store/road_tot.rData")
+
+```
+
+```{r echo=FALSE, results='asis'}
+
+load("3_pipeline/tmp/road_tot.rData")
+
+knitr::kable(road_tot[1:4], booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  scroll_box(height="200px")
+
+```
+
+
+
+#### Proportion of pinch point within set distance to a road {-}
+
+```{r eval=FALSE}
+# Compute a 50 meter buffer around roads in Edmonton
+r_buf<-st_buffer(road_ws_clip, dist = 50, singleSide = FALSE)
+
+#intersect
+r_buf_int<-st_intersection(r_buf, pp_s_clip_clus)
+r_buf_int$r_area<-st_area(r_buf_int)
+
+
+x<-r_buf_int
+
+#dissolve pilygons by group # and calculate area for each group
+x_dis <- x %>% group_by(group) %>% summarize() 
+#x_dis$r_area<-st_area(nc_dissolve)
+x_dis$r_area<-st_area(x_dis)
+
+#add the area for the pinch-points
+x_dis<-left_join(x_dis, as.data.frame(pp_s_clip_clus))
+
+#calculate proportion of polygon within distance of a road
+x<-x_dis
+prop_Road<-as.data.frame(x) %>%
+  group_by(group)%>%
+  summarize(pp_area=mean(pp_area), r_area=sum(r_area) )%>%
+  mutate(proportion=r_area/pp_area)
+
+save(prop_Road, file="3_pipeline/store/prop_Road.rData")
+
+```
+
+```{r echo=FALSE, results='asis'}
+
+load("3_pipeline/tmp/xSum_pRoad.rData")
+
+knitr::kable(xSum_pRoad, booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  scroll_box(height="200px")
+
+```
+
+
+#### Attributes of intersecting roads {-}
+```{r eval=FALSE}
+int_road_attr<-as.data.frame(int_pp_buf)[c("ID", "group", "LANE_WIDTH", "SPEED")]
+save(int_road_attr, file="3_pipeline/tmp/int_road_attr.rData")
+
+```
+
+```{r echo=FALSE, results='asis'}
+
+load("3_pipeline/tmp/int_road_attr.rData")
+
+knitr::kable(int_road_attr, booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  scroll_box(height="200px")
+
+```
+
+
+#### Create distance to road raster {-}
+
+```{r eval=FALSE}
+load("1_data/manual/study_area.rData")
+
+# shp<-study_area
+# 
+# grid <- shp %>% 
+#   st_make_grid(cellsize = 10, what = "centers") #%>% # grid of points
+#   #st_intersection(shp)                               #
+# 
+# d = st_distance(grid, road_ws_clip, byid=TRUE)
+  
+######
+
+lines<-road_ws_clip$geometry
+#lines<-st_union(lines)
+
+plot(lines)
+
+r = raster(extent(study_area),400,400)
+crs(r)<-crs(lines)
+
+#r<-crs(r, crs="+init=ESPG:3776")
+#(rgeos)
+p = as(r,"SpatialPoints")
+p<-st_as_sf(p)
+
+#d=gDistance(p, lines)
+d=st_distance(p, lines)
+dim(d)  
+dmin=apply(d, 1, min)  
+r[]=dmin
+
+
+
+save(r, file="3_pipeline/tmp/dist2road.rData")
+```
+
+
+#### Summarize distance to road pixels {-}
+
+```{r eval=FALSE}
+load("3_pipeline/tmp/dist2road.rData")
+
+poly<-pp_s_clip_clus_buf_ext
+#poly$ID <- 1:length(poly)
+poly$layer <- NULL
+d <- data.frame(poly)
+v<-extract(r,  poly, na.rm=TRUE, df=TRUE)
+
+vd <- merge(d, v, by="ID")
+vd %>%
+  rename(minDist=layer)
+
+names(vd)[names(vd) == "layer"] <- "minDist"
+
+#vd<- vd[-c(3)]
+#save(vd, file="3_pipeline/tmp/vd.rData")
+
+
+##### plot ###########
+
+m4<-
+  tm_shape(r$layer)+
+    tm_raster(palette = c("#7fcdbb", "#253494"),
+      title = "Distance to road (m)",
+              contrast = c(0,.8),
+              style = "cont")+
+   tm_shape(road_ws_clip)+tm_lines(col="#ffffd9")+
+  #tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    #tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus)  +
+    #tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.8)+
+    tm_borders(alpha=1)+
+   tm_shape(pp_s_clip_clus_buf)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.3)+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m4
+
+#convert tmap to grob
+g1<-tmap_grob(m4)
+
+# create hist plots in ggplot convert to grob objects which will be plotted in tmap.
+g2<-vd%>%
+    ggplot(aes(x = minDist)) +
+    geom_histogram(binwidth=1, position = "identity", aes(y=..ncount..), fill="#00441b") +
+  #geom_density(alpha=.2, fill="#FF6666")+
+    scale_y_continuous(labels = percent_format())+
+    #scale_x_continuous()+
+  labs(x="distance 2 road", y="% count")+
+    theme(#panel.background = element_blank(),
+          axis.ticks=element_blank(),
+          strip.background =element_rect(fill="white"),
+          panel.background = element_rect(fill="#ece2f0"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())+
+    facet_grid(~ID)
+  # geom_vline(aes(xintercept=grp.mean),
+  #           color="blue", linetype="dashed", size=1)+
+g2
+
+
+
+lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(1),
+              c(2))   
+
+m2<-arrangeGrob(g1, g2, layout_matrix =lay2)
+
+ggsave("4_output/maps/summary/distRoad_hist_map.png", m2, width=15, height=12)
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Histograms of distance to road values for each pinch point.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/distRoad_hist_map.png")
+```
+
+
+
+### Trails {-}
+
+
+#### Total length of trails in pinch-points{-}
+
+```{r eval=FALSE}
+########## just in buffer ############
+polys_buf<-pp_s_clip_clus_buf_ext
+
+int_buf = st_intersection(trails_clip, polys_buf)
+
+plot(polys_buf$geom)
+plot(int_buf$geom, lwd = 2, add = TRUE)
+
+#Get the total length of trail within each polygon. (polygons with no lines are missing from list)
+trail_tot_buf<-tapply(st_length(int_buf), int_buf$ID.1,sum)
+
+polys_buf$trail_tot_buf = rep(0,nrow(polys_buf))
+polys_buf$trail_tot_buf[match(names(trail_tot_buf),polys_buf$ID)] = trail_tot_buf
+
+plot(polys_buf[,"trail_tot_buf"])
+save(polys_buf, file = "3_pipeline/tmp/polys_buf.rData")
+
+
+########## just in pinch-point cluster ############
+polys_pp<-pp_s_clip_clus
+
+int_pp = st_intersection(trails_clip, polys_pp)
+
+plot(polys_pp$geom)
+plot(int_pp$geom, lwd = 2, add = TRUE)
+
+#Get the total length of trail within each polygon. (polygons with no lines are missing from list)
+trail_tot_pp<-tapply(st_length(int_pp), int_pp$group,sum)
+
+polys_pp$trail_tot_pp = rep(0,nrow(polys_pp))
+polys_pp$trail_tot_pp[match(names(trail_tot_pp),polys_pp$group)] = trail_tot_pp
+
+plot(polys_pp[,"trail_tot_pp"])
+save(polys_pp, file = "3_pipeline/tmp/polys_pp.rData")
+
+
+########## pp and buffer ############
+polys_pp_buf<-pp_s_clip_clus_buf
+
+int_pp_buf = st_intersection(trails_clip, polys_pp_buf)
+
+plot(polys_pp_buf$geom)
+plot(int_pp_buf$geom, lwd = 2, add = TRUE)
+
+#Get the total length of trail within each polygon. (polygons with no lines are missing from list)
+trail_tot_pp_buf<-tapply(st_length(int_pp_buf), int_pp_buf$group,sum)
+
+polys_pp_buf$trail_tot_pp_buf = rep(0,nrow(polys_pp_buf))
+polys_pp_buf$trail_tot_pp_buf[match(names(trail_tot_pp_buf),polys_pp_buf$group)] = trail_tot_pp_buf
+
+plot(polys_pp_buf[,"trail_tot_pp_buf"])
+
+save(polys_pp_buf, file = "3_pipeline/tmp/polys_pp_buf.rData")
+
+trail_tot<-cbind(polys_pp, polys_buf, polys_pp_buf)
+
+trail_tot<-trail_tot[-c(2,4, 5,7)]
+
+save(trail_tot,file="3_pipeline/store/trail_tot.rData")
+```
+
+
+```{r echo=FALSE, results='asis'}
+
+load("3_pipeline/tmp/trail_tot.rData")
+
+knitr::kable(trail_tot[1:4], booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  scroll_box(height="200px")
+
+```
+
+
+
+#### Proportion of pinch point within set distance to a trail {-}
+
+```{r eval=FALSE}
+# Compute a 50 meter buffer around roads in Edmonton
+t_buf<-st_buffer(trails_clip, dist = 50, singleSide = FALSE)
+
+#intersect
+t_buf_int<-st_intersection(t_buf, pp_s_clip_clus)
+t_buf_int$t_area<-st_area(t_buf_int)
+
+
+x<-t_buf_int
+
+#dissolve pilygons by group # and calculate area for each group
+x_dis <- x %>% group_by(group) %>% summarize() 
+x_dis$t_area<-st_area(x_dis)
+
+#add the area for the pinch-points
+x_dis<-left_join(x_dis, as.data.frame(pp_s_clip_clus))
+
+#calculate proportion of polygon within distance of a trail
+x<-x_dis
+prop_trail<-as.data.frame(x) %>%
+  group_by(group)%>%
+  summarize(pp_area=mean(pp_area), t_area=sum(t_area) )%>%
+  mutate(proportion=t_area/pp_area)
+
+save(prop_trail, file="3_pipeline/store/prop_trail.rData")
+
+```
+
+```{r echo=FALSE, results='asis'}
+
+load("3_pipeline/tmp/xSum_ptrail.rData")
+
+knitr::kable(xSum_ptrail, booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  scroll_box(height="200px")
+
+```
+
+#### Create distance to trail raster {-}
+
+```{r eval=FALSE}
+load("1_data/manual/study_area.rData")
+
+# shp<-study_area
+# 
+# grid <- shp %>% 
+#   st_make_grid(cellsize = 10, what = "centers") #%>% # grid of points
+#   #st_intersection(shp)                               #
+# 
+# d = st_distance(grid, road_ws_clip, byid=TRUE)
+  
+######
+
+lines<-trails_clip$geometry
+#lines<-st_union(lines)
+
+plot(lines)
+
+r = raster(extent(study_area),400,400)
+crs(r)<-crs(lines)
+
+#r<-crs(r, crs="+init=ESPG:3776")
+#(rgeos)
+p = as(r,"SpatialPoints")
+p<-st_as_sf(p)
+
+#d=gDistance(p, lines)
+d=st_distance(p, lines)
+dim(d)  
+dmin=apply(d, 1, min)  
+r[]=dmin
+
+
+
+save(r, file="3_pipeline/tmp/dist2trail.rData")
+```
+
+
+#### Summarize distance to road pixels {-}
+
+```{r eval=FALSE}
+load("3_pipeline/tmp/dist2trail.rData")
+
+poly<-pp_s_clip_clus_buf_ext
+#poly$ID <- 1:length(poly)
+poly$layer <- NULL
+d <- data.frame(poly)
+v<-extract(r,  poly, na.rm=TRUE, df=TRUE)
+
+vd <- merge(d, v, by="ID")
+vd %>%
+  rename(minDist=layer)
+
+names(vd)[names(vd) == "layer"] <- "minDist"
+
+#vd<- vd[-c(3)]
+#save(vd, file="3_pipeline/tmp/vd.rData")
+
+
+##### plot ###########
+
+m4<-
+  tm_shape(r$layer)+
+    tm_raster(palette = c("#ffffd9","#a5dccf", "#7fcdbb", "#384ccd", "#384ccd", "#253494"),
+      title = "Distance to trail (m)",
+              contrast = c(0,.8),
+              style = "cont")+
+   tm_shape(trails_clip)+tm_lines(col="white")+
+  #tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    #tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus)  +
+    #tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.8)+
+    tm_borders(alpha=1)+
+   tm_shape(pp_s_clip_clus_buf)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.3)+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m4
+
+#convert tmap to grob
+g1<-tmap_grob(m4)
+
+# create hist plots in ggplot convert to grob objects which will be plotted in tmap.
+g2<-vd%>%
+    ggplot(aes(x = minDist)) +
+    geom_histogram(binwidth=1, position = "identity", aes(y=..ncount..), fill="#00441b") +
+  #geom_density(alpha=.2, fill="#FF6666")+
+    scale_y_continuous(labels = percent_format())+
+    #scale_x_continuous()+
+  labs(x="distance 2 road", y="% count")+
+    theme(#panel.background = element_blank(),
+          axis.ticks=element_blank(),
+          strip.background =element_rect(fill="white"),
+          panel.background = element_rect(fill="#ece2f0"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())+
+    facet_grid(~ID)
+  # geom_vline(aes(xintercept=grp.mean),
+  #           color="blue", linetype="dashed", size=1)+
+g2
+
+
+
+lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(1),
+              c(2))   
+
+m2<-arrangeGrob(g1, g2, layout_matrix =lay2)
+
+ggsave("4_output/maps/summary/distTrail_hist_map.png", m2, width=15, height=12)
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Histograms of distance to trail values for each pinch point.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/distTrail_hist_map.png")
+```
+
+
+
+

@@ -78,13 +78,23 @@ pre[class] {
 
 # Calculate Metrics
 
-## Overlay analyses {-}
+## Overlay {-}
 
-## Proximity analyses {-}
+```{r child = '2_code/rNotebooks/overlayAnalysis.Rmd'}
+```
 
-## Raster analyses {-}
+## Proximity {-}
+
+```{r child = '2_code/rNotebooks/proximityAnalysis.Rmd'}
+```
+
+## Raster {-}
 
 ```{r child = '2_code/rNotebooks/rasterAnalysis.Rmd'}
+```
+
+## Combine {-}
+```{r child = '2_code/rNotebooks/combineMetrics.Rmd'}
 ```
 
 
@@ -93,6 +103,15 @@ pre[class] {
 ## Principal Componants Analysis {-}
 
 # Multivariate maps
+
+```{r child = '2_code/rNotebooks/visualizeResults.Rmd'}
+```
+
+## Profile plots {-}
+
+```{r child ='2_code/rNotebooks/crossSection.Rmd'}
+```
+
 
 # Weighted overlay model
 

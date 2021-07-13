@@ -22,6 +22,11 @@ pre[class] {
 
 ```{r eval=FALSE}
 library(raster)
+library(sf)
+library(ggplot2)
+library(tmap)
+library(scales)
+library(gridExtra)
 ```
 
 
@@ -33,11 +38,13 @@ library(raster)
 Load prepared rasters.
 
 ```{r eval=FALSE}
-load("1_data/manual/slope.rData")
-load("1_data/manual/aspect.rData")
-load("1_data/manual/SlopeRange.rData")
-```
+load("1_data/manual/slope_clip.rData")
+load("1_data/manual/aspect_clip.rData")
+load("1_data/manual/cell_clip.rData")
 
+# slope_clip<-raster("1_data/manual/slope_clip.tif")
+# aspect_clip<-raster("1_data/manual/aspect_clip.tif")
+```
 
 
 #### Pinch-points {-}
@@ -47,7 +54,7 @@ Load buffered pinch-point polygons
 ```{r eval=FALSE}
 
 # buffered pinch point polygons
-"3_pipeline/store/pp_s_clip_clus_buf_ext.rData"
+load("3_pipeline/store/pp_s_clip_clus_buf_ext.rData")
 
 # study area
 load("1_data/manual/study_area.rdata")
@@ -57,16 +64,320 @@ load("1_data/manual/v_road_clip.rdata")
 
 # load polygon representing North Central Region of Saskatchewan region of the ribbon of green
 load("1_data/manual/nscr.rdata")  
+
+# pinch point clusters
+load("3_pipeline/tmp/pp_s_clip_clus.rData")
+
+# buffered pinchpoints
+load("3_pipeline/store/pp_s_clip_clus_buf.rData")
 ```
 
 
 ### Prepare rasters {-}
  
 Stack rasters into a single object
+```{r eval=FALSE}
+#create a list of raster objects to include
+r_list<-list(slope_clip, aspect_clip)
+
+cell_clip<-stack(r_list)
+
+#save stack as r object
+stackSave(r_stack,file="3_pipeline/store/r_stack")
+```
 
 
 ### Extract data {-}
 
+Check the extreme values if the raster stack to identity any values that shouldn’t be included (e.g. -9999).
+
+```{r eval=FALSE}
+stackOpen("3_pipeline/store/r_stack")
+
+minValue(r_stack)
+maxValue(r_stack)
+
+hist(r_stack)
+```
+
+
+#### Summary table {-}
+
 Extract and summarize raster data within each pinch-point polygon
 
-### Clean summary dataframe {-}
+```{r eval=FALSE}
+
+#calculate mean
+pp_r_mean<-extract(r_stack,  pp_s_clip_clus_buf_ext, fun=mean, na.rm=TRUE)
+colnames(pp_r_mean)<-paste("mean", substr(colnames(pp_r_mean), 1, nchar(colnames(pp_r_mean))-5), sep="_")
+
+#calculate sd
+pp_r_sd<-extract(r_stack,  pp_s_clip_clus_buf_ext, fun=sd, na.rm=TRUE)                   
+colnames(pp_r_sd)<-paste("sd", substr(colnames(pp_r_sd), 1, nchar(colnames(pp_r_sd))-5), sep="_")          
+
+#calculate max
+pp_r_max<-extract(r_stack,  pp_s_clip_clus_buf_ext, fun=max, na.rm=TRUE)                   
+colnames(pp_r_max)<-paste("max", substr(colnames(pp_r_max), 1, nchar(colnames(pp_r_sd))-3), sep="_") 
+
+#calculate min
+pp_r_min<-extract(r_stack,  pp_s_clip_clus_buf_ext, fun=min, na.rm=TRUE)                   
+colnames(pp_r_min)<-paste("min", substr(colnames(pp_r_min), 1, nchar(colnames(pp_r_sd))-3), sep="_")
+
+
+##### Cell data #########
+pp_r_l_mean<-extract(cell_clip,  pp_s_clip_clus_buf_ext, fun=mean, na.rm=TRUE)
+colnames(pp_r_l_mean)<-paste("mean_cell", substr(colnames(pp_r_l_mean), 1, nchar(colnames(pp_r_l_mean))-5))
+
+#calculate sd
+pp_r_l_sd<-extract(cell_clip,  pp_s_clip_clus_buf_ext, fun=sd, na.rm=TRUE)                   
+colnames(pp_r_l_sd)<-paste("sd_cell", substr(colnames(pp_r_l_sd), 1, nchar(colnames(pp_r_l_sd))-5))          
+
+#calculate max
+pp_r_l_max<-extract(cell_clip,  pp_s_clip_clus_buf_ext, fun=max, na.rm=TRUE)                   
+colnames(pp_r_l_max)<-paste("max_cell", substr(colnames(pp_r_l_max), 1, nchar(colnames(pp_r_l_sd))-3)) 
+
+#calculate min
+pp_r_l_min<-extract(cell_clip,  pp_s_clip_clus_buf_ext, fun=min, na.rm=TRUE)                   
+colnames(pp_r_l_min)<-paste("min_cell", substr(colnames(pp_r_l_min), 1, nchar(colnames(pp_r_l_sd))-3))
+
+
+
+#combine metrics into a single table
+pp_r<-cbind(ID=pp_s_clip_clus_buf_ext$ID, pp_r_min, pp_r_max, pp_r_mean, pp_r_sd, pp_r_l_min, pp_r_l_max, pp_r_l_mean, pp_r_l_sd)
+
+
+pp_r<-cbind(pp_r, pp_r_l_min, pp_r_l_max, pp_r_l_mean, pp_r_l_sd )
+#reorder columns
+pp_r<-pp_r[,c("ID","min_slope", "max_slope", "mean_slope", "sd_slope", "min_aspect", "max_aspect", "mean_aspect", "sd_aspect", "min_cell", "max_cell", "mean_cell", "sd_cell")]
+
+# save
+save(pp_r,file="3_pipeline/store/pp_r.rData")
+```
+
+
+```{r echo=FALSE, results='asis'}
+
+load("3_pipeline/store/pp_r.rData")
+
+knitr::kable(pp_r, booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  scroll_box(width = "100%", height="200px")
+```
+
+#### Summary histograms {-}
+
+Create a histogram of raster values for each pinch point.
+
+```{r eval=FALSE}
+
+poly<-pp_s_clip_clus_buf_ext
+#poly$ID <- 1:length(poly)
+poly$layer <- NULL
+d <- data.frame(poly)
+v<-extract(r_stack,  poly, na.rm=TRUE, df=TRUE)
+
+vd <- merge(d, v, by="ID")
+vd<- vd[-c(3)]
+save(vd, file="3_pipeline/tmp/vd.rData")
+
+# x<-vd[vd$ID==1,]
+# h<-hist(aspect_clip)
+
+############# Slope plot #################
+
+# basemap
+m4<-
+  tm_shape(slope_clip)+
+    tm_raster(palette = c("white", "#00441b"),
+      title = "Slope",
+              contrast = c(0,.8),
+              style = "cont")+
+   tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus)  +
+    tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.8)+
+    tm_borders(alpha=1)+
+   tm_shape(pp_s_clip_clus_buf)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.3)+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m4
+
+#convert tmap to grob
+g1<-tmap_grob(m4)
+
+
+# create hist plots in ggplot convert to grob objects which will be plotted in tmap.
+
+g2<-vd%>%
+    ggplot(aes(x = slope_clip)) +
+    geom_histogram(binwidth=1, position = "identity", aes(y=..ncount..), fill="#00441b") +
+  #geom_density(alpha=.2, fill="#FF6666")+
+    scale_y_continuous(labels = percent_format())+
+  labs(x="slope", y="% count")+
+    theme(#panel.background = element_blank(),
+          axis.ticks=element_blank(),
+          strip.background =element_rect(fill="white"),
+          panel.background = element_rect(fill="#ece2f0"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())+
+  facet_grid(~ID)
+  # geom_vline(aes(xintercept=grp.mean),
+  #           color="blue", linetype="dashed", size=1)+
+g2
+
+
+lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(1),
+              c(2))   
+
+m2<-arrangeGrob(g1, g2, layout_matrix =lay2)
+
+ggsave("4_output/maps/summary/raster_slope_hist_map.png", m2, width=15, height=12
+       )
+
+############# Aspect plot #################
+
+m5<-
+  tm_shape(aspect_clip)+
+    tm_raster(palette= c("white", "#023858"),
+              title = "Aspect",
+              contrast = c(0,.8))+
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus)  +
+    tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.8)+
+    tm_borders(alpha=1)+
+   tm_shape(pp_s_clip_clus_buf)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.3)+
+  
+  
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=.8,
+            )
+m5
+
+g3<-tmap_grob(m5)
+
+
+g4<-vd%>%
+    ggplot(aes(x = aspect_clip)) +
+    geom_histogram(binwidth=1, position = "identity", aes(y=..ncount..), fill="#023858") +
+  #geom_density(alpha=.2, fill="#FF6666")+
+    scale_y_continuous(labels = percent_format())+
+  labs(x="aspect", y="% count")+
+    theme(#panel.background = element_blank(),
+          axis.ticks=element_blank(),
+          strip.background =element_rect(fill="white"),
+          panel.background = element_rect(fill="#ece2f0"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())+
+  facet_grid(~ID)
+  # geom_vline(aes(xintercept=grp.mean),
+  #           color="blue", linetype="dashed", size=1)+
+g4
+
+
+m3<-arrangeGrob(g3, g4, layout_matrix =lay2)
+
+ggsave("4_output/maps/summary/raster_aspect_hist_map.png", m3, width=15, height=12)
+
+
+
+######## Cell phone use ##############
+
+m6<-
+  #tm_shape(v_road_clip)+tm_lines(col="#636363")+
+  #tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(cell_clip)+
+    tm_raster(palette = c("white", "#f03b20"),
+      title = "visitation density",
+              contrast = c(0, 1),
+              style = "cont",
+      alpha = .8)+
+  tm_shape(pp_s_clip_clus)  +
+    tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.8)+
+    tm_borders(alpha=1)+
+   tm_shape(pp_s_clip_clus_buf)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.3)+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=1,
+            )
+m6
+
+g5<-tmap_grob(m6)
+
+poly<-pp_s_clip_clus_buf_ext
+#poly$ID <- 1:length(poly)
+poly$layer <- NULL
+d <- data.frame(poly)
+v<-extract(cell_clip,  poly, na.rm=TRUE, df=TRUE)
+
+vd <- merge(d, v, by="ID")
+vd<- vd[-c(3)]
+
+
+g6<-vd%>%
+    ggplot(aes(x = Visitation_Density_InclRoads_20210625)) +
+    geom_histogram(binwidth=.001, position = "identity", aes(y=..ncount..), fill="#023858") +
+  #geom_density(alpha=.2, fill="#FF6666")+
+    scale_y_continuous(labels = percent_format())+
+  labs(x="density of use", y="% count")+
+    theme(#panel.background = element_blank(),
+          axis.ticks=element_blank(),
+          strip.background =element_rect(fill="white"),
+          panel.background = element_rect(fill="#ece2f0"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())+
+  facet_grid(~ID)
+  # geom_vline(aes(xintercept=grp.mean),
+  #           color="blue", linetype="dashed", size=1)+
+g6
+
+
+m7<-arrangeGrob(g5, g6, layout_matrix =lay2)
+
+ggsave("4_output/maps/summary/raster_cell_hist_map.png", m7, width=15, height=12)
+```
+
+```{r echo=FALSE, fig.cap= "Histograms of slope values for each pinch point.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/raster_slope_hist_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Histograms of aspect values for each pinch point.",  out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/raster_aspect_hist_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Histograms of cellphone density values for each pinch point.",  out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/raster_cell_hist_map.png")
+```

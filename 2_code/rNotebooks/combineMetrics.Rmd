@@ -1,0 +1,101 @@
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+}
+```
+
+Load packages
+
+```{r}
+library(tidyr)
+```
+
+
+### Gather metrics 
+
+```{r eval=FALSE}
+
+# Canopy
+load("3_pipeline/store/can_poly_cov.rData")
+
+# UPLVI
+load("3_pipeline/store/UPLVI_class_cov.rData")
+
+# Total length of roads
+load("3_pipeline/store/road_tot.rData")
+
+# Proportion of pinch point within 50m to a road
+load("3_pipeline/store/prop_Road.rData")
+
+# Total length of trails
+load("3_pipeline/store/trail_tot.rData")
+
+# Proportion of pinch point within 50m to a trail
+load("3_pipeline/store/prop_trail.rData")
+
+#extracted raster data
+load("3_pipeline/store/pp_r.rData")
+
+load("3_pipeline/tmp/pp_s_clip_clus.rData")
+```
+
+### Reformat data frames {-}
+
+```{r eval=FALSE}
+can_poly_cov2<-
+    can_poly_cov%>% 
+    dplyr::select(-c(3)) %>% 
+    spread(key=Class, value=proportion)%>%
+    rename("Shrub_Dec"="Shrub-Dec", "Tree_Con"="Tree-Con", "Tree_Dec"="Tree-Dec", "ID"="group")
+
+UPLVI_PRIMECLAS<-spread(UPLVI_class_cov$PRIMECLAS[-c(3)], PRIMECLAS, t_proportion)
+UPLVI_LANDCLAS<-spread(UPLVI_class_cov$LANDCLAS[-c(3)], LANDCLAS, t_proportion)
+UPLVI_STYPE<-spread(UPLVI_class_cov$STYPE[-c(3)], STYPE, t_proportion)
+
+prop_Road<-prop_Road %>% 
+  rename("r_proportion"="proportion") 
+
+prop_trail<- prop_trail %>% 
+  rename("t_proportion"="proportion") %>% 
+  dplyr::select(-c("pp_area"))
+
+prop_Road<-prop_Road%>%
+  rename("ID"="group")
+
+prop_trail<-prop_trail%>%
+  rename("ID"="group")
+
+trail_tot<-as.data.frame(trail_tot)%>%
+  rename("ID"="group")%>%
+  dplyr::select(-c(5:7))
+
+road_tot<-as.data.frame(road_tot)%>%
+  rename("ID"="group")%>%
+  dplyr::select(-c(5:7))
+
+pp_metrics<-can_poly_cov2%>%
+  left_join(UPLVI_PRIMECLAS)%>%
+  left_join(UPLVI_LANDCLAS)%>%
+  left_join(UPLVI_STYPE)%>%
+  left_join(prop_Road)%>%
+  left_join(road_tot)%>%
+  left_join(prop_trail)%>%
+  left_join(trail_tot)
+
+save(pp_metrics, file="")
+
+```
+

@@ -1,0 +1,69 @@
+
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 500px;
+}
+```
+
+
+## Multivariate maps {-}
+
+Multivariate plots summarizing composition of pinch-point buffers.
+
+### Slope {-}
+
+```{r echo=FALSE, fig.cap= "Histograms of slope values for each pinch point.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/raster_slope_hist_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Histograms of aspect values for each pinch point.",  out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/raster_aspect_hist_map.png")
+```
+
+### Vegetation cover {-}
+
+```{r echo=FALSE, fig.cap= "Canopy poly class map #1.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/can_poly_sum_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Canopy poly class map #2.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/can_poly_sum_map_2.png")
+```
+
+
+### Landcover {-}
+
+Data was from the UPLVI layer.
+
+```{r echo=FALSE, fig.cap= "Canopy poly class map #2.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/UPLVI_class_cov_map.png")
+```
+
+### Linear features
+
+```{r echo=FALSE, fig.cap= "Histograms of distance to road values for each pinch point.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/distRoad_hist_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Histograms of distance to trail values for each pinch point.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/distTrail_hist_map.png")
+```
+
+
+
+
+
+

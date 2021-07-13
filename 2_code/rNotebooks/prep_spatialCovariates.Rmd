@@ -18,8 +18,9 @@ pre[class] {
 ```
 
 
+### Prep{-}
 
-##### Load packages {-}
+#### Load packages {-}
 
 ```{r eval=F}
 library(sf)
@@ -28,7 +29,6 @@ library(RColorBrewer)
 library(raster)
 library(rgdal)
 ```
-
 
 #### Load study area{-}
 
@@ -199,18 +199,22 @@ knitr::kable(head(tsp_psp_clip), booktabs=TRUE) %>%
 #### Slope {-}
 
 ```{r eval=FALSE}
-slope<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Slope_3_8_16_45_RGB.tif")
+#slope<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Slope_3_8_16_45_RGB.tif")
+slope<-raster("1_data/external/Edmonton_slope_aspect_in_degrees/slope")
 slope<-projectRaster(slope, crs=crs(study_area))
 
 slope_clip<-crop(slope, study_area)
+hist(aspect_clip)
 
-save(slope, file="1_data/manual/slope.rData")
+writeRaster(slope_clip, filename="1_data/manual/slope_clip", format='GTiff', overwrite=TRUE)
+save(slope_clip, file="1_data/manual/slope_clip.rData")
 
 m4<-
   tm_shape(slope_clip)+
-    tm_raster(palette="BuGn",
-              title = "Slope",
-              contrast = c(0,.8))+
+    tm_raster(palette = c("white", "#00441b"),
+      title = "Slope",
+              contrast = c(0,.8),
+              style = "cont")+
   tm_layout(legend.outside = FALSE, 
             legend.text.size = .8, 
             legend.bg.color="white", 
@@ -221,7 +225,6 @@ m4<-
 m4
 
 tmap_save(m4, "4_output/maps/slope_map.png", outer.margins=c(0,0,0,0))  
-
 ```
 
 ```{r echo=FALSE, fig.cap= "Slope.", out.width = '100%'}
@@ -232,16 +235,21 @@ knitr::include_graphics("4_output/maps/slope_map.png")
 
 ``` {r eval=FALSE}
 
-aspect<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Aspect_RGB_(2).tif")
+#aspect<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/Aspect_RGB_(2).tif")
+aspect<-raster("1_data/external/Edmonton_slope_aspect_in_degrees/aspect")
 aspect<-projectRaster(aspect, crs=crs(study_area))
 
 aspect_clip<-crop(aspect, study_area)
+hist(aspect_clip)
 
-save(aspect, file="1_data/manual/aspect.rData")
+#save
+writeRaster(aspect_clip, filename="1_data/manual/aspect_clip", format='GTiff', overwrite=TRUE)
+
+save(aspect_clip, file="1_data/manual/aspect_clip.rData")
 
 m5<-
   tm_shape(aspect_clip)+
-    tm_raster(palette="Blues",
+    tm_raster(palette= c("white", "#023858"),
               title = "Aspect",
               contrast = c(0,.8))+
   tm_layout(legend.outside = FALSE, 
@@ -262,15 +270,20 @@ knitr::include_graphics("4_output/maps/aspect_map.png")
 ```
 
 
+
+
+``` {r eval=FALSE, echo=FALSE}
+
 #### Slope range {-}
 
-``` {r eval=FALSE}
 SlopeRange<-raster("1_data/external/Environmental_Sensitivity_Data/Slope/SlopeRange_1_3_15_30.img")
 SlopeRange<-projectRaster(SlopeRange, crs=crs(study_area))
 
 SlopeRange_clip<-crop(SlopeRange, study_area)
 
-save(SlopeRange, file="1_data/manual/SlopeRange.rData")
+writeRaster(SlopeRange_clip, filename="1_data/manual/slopeRange_clip", overwrite=TRUE, format='GTiff')
+
+save(SlopeRange_clip, file="1_data/manual/SlopeRange_clip.rData")
 
 m6<-
   tm_shape(SlopeRange_clip)+
@@ -317,11 +330,11 @@ tmap_save(m7, "4_output/maps/SlopeRange_shp_map.png", outer.margins=c(0,0,0,0))
 ```
 
 
-```{r echo=FALSE, fig.cap= "Slope range raster.", out.width = '100%'}
+```{r eval=FALSE, echo=FALSE, fig.cap= "Slope range raster.", out.width = '100%'}
 knitr::include_graphics("4_output/maps/SlopeRange_map.png")
 ```
 
-```{r echo=FALSE, fig.cap= "Slope range polygons.", out.width = '100%'}
+```{r eval=FALSE, echo=FALSE, fig.cap= "Slope range polygons.", out.width = '100%'}
 knitr::include_graphics("4_output/maps/SlopeRange_shp_map.png")
 ```
 
@@ -335,10 +348,11 @@ knitr::include_graphics("4_output/maps/SlopeRange_shp_map.png")
 ```{r eval=FALSE}
 
 can_natural<-raster("1_data/external/Canopy_Cover_2020/All_Classes_Natural.tif")
-st_crs(can_natural)
+#st_crs(can_natural)
 
 can_natural_clip<-crop(can_natural, study_area)
 
+writeRaster(can_natural_clip, filename="1_data/manual/can_natural_clip", format='GTiff')
 save(can_natural_clip, file="1_data/manual/can_natural_clip.rData")
 
 m18<-
@@ -415,7 +429,7 @@ knitr::include_graphics("4_output/maps/can_naturalized_map.png")
 ``` {r eval=FALSE}
 
 can_ornamental<-raster("1_data/external/Canopy_Cover_2020/All_Classes_Ornamental.tif")
-st_crs(can_ornamental)
+#st_crs(can_ornamental)
 
 can_ornamental_clip<-crop(can_ornamental, study_area)
 
@@ -455,27 +469,13 @@ knitr::include_graphics("4_output/maps/can_natural_map.png")
 
 #### Canopy polygons {-}
 
+Polygons with veg classes derived from canopy rasters.
+
 ``` {r eval=FALSE}
-#  see layers in ESRI geodatabase
 
-l<-st_layers(dsn="1_data/external/Canopy_Cover_2020/PolygonData.gdb")
-l
-
-can_poly<-st_read(dsn="1_data/external/Canopy_Cover_2020/PolygonData.gdb", layer="All_Polygons",options=list("METHOD=SKIP"))
-
-st_crs(can_poly)
-# NAD83 / Alberta 3TM ref merid 114 W 
-
-
-# there are some invalid geometries in this spatial layer.
-# identify invalid geometries:
-valid<-st_is_valid(can_poly)
-
-#fix by by buffering geometries:
-can_poly_2<-st_buffer(can_poly[!is.na(valid),], 0.0)
-
-
-can_poly_clip<-st_intersection(st_make_valid(can_poly2), study_area)
+# Layer was clipped to the study area in ArcGIS due to it's size
+can_poly_clip<-st_read("1_data/manual/can_poly_arc_clip.shp")
+st_crs(can_poly_clip)
 
 save(can_poly_clip, file="1_data/manual/can_poly_clip.rData")
 
@@ -486,7 +486,7 @@ m21<-
     tm_fill(col="white", alpha=.7)+
     tm_borders(col = "#636363")+
   tm_shape(can_poly_clip)+
-    tm_fill(col="Value", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, title="Slope Range Polygons")+
+    tm_fill(col="Class", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, title="Vegetation class")+
     #tm_borders(col = "#636363")
   tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
 m21
@@ -495,9 +495,20 @@ tmap_save(m21, "4_output/maps/can_poly_map.png", outer.margins=c(0,0,0,0))
 ```
 
 ```{r echo=FALSE, fig.cap= "Canopy polygons.", out.width = '100%'}
-#knitr::include_graphics("4_output/maps/can_poly_map.png")
+knitr::include_graphics("4_output/maps/can_poly_map.png")
 ```
 
+##### Attributes {-}
+
+```{r echo=FALSE, results='asis'}
+
+load("1_data/manual/can_poly_clip.rData")
+
+knitr::kable(head(can_poly_clip[-c(ncol(can_poly_clip))]), booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  column_spec(1, width= "20em")%>%
+  scroll_box(width = "100%", height="200px")
+```
 
 ---
 
@@ -1062,5 +1073,50 @@ knitr::kable(head(CHRP_clip[-c(ncol(CHRP_clip))]), booktabs=TRUE) %>%
   column_spec(1, width= "20em")%>%
   scroll_box(width = "100%", height="200px")
 
+```
+
+----
+
+### Cell phone use data {-}
+
+```{r eval=FALSE}
+#slope<-raster("1_data/external/Environmental_Sensitivity_Data/cell/cell_3_8_16_45_RGB.tif")
+cell<-raster("1_data/external/Visitation_forBrenden_20210625/Visitation_Density_InclRoads_20210625.tif")
+cell<-projectRaster(cell, crs=crs(study_area))
+
+plot(cell)
+cell_clip<-crop(cell, study_area)
+hist(cell)
+
+writeRaster(cell_clip, filename="1_data/manual/cell_clip", format='GTiff', overwrite=TRUE)
+save(cell_clip, file="1_data/manual/cell_clip.rData")
+
+
+m4<-
+  #tm_shape(v_road_clip)+tm_lines(col="#636363")+
+  #tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(cell_clip)+
+    tm_raster(palette = c("white", "#f03b20"),
+      title = "visitation density",
+              contrast = c(0, 1),
+              style = "cont",
+      alpha = .8)+
+  tm_layout(legend.outside = FALSE, 
+            legend.text.size = .8, 
+            legend.bg.color="white", 
+            legend.frame=TRUE,
+            legend.title.size=1, 
+            legend.frame.lwd=1,
+            )
+m4
+
+tmap_save(m4, "4_output/maps/cell_map.png", outer.margins=c(0,0,0,0))  
+``````
+
+```{r echo=FALSE, fig.cap= "Cellphone derived visitation density .", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cell_map.png")
 ```
 

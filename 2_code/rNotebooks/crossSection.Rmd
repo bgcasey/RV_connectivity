@@ -1,0 +1,675 @@
+
+
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+}
+```
+
+
+```{r eval=FALSE}
+library(sf)
+library(tmap)
+library(topoDistance)
+library(raster)
+library(purrr)
+library(dplyr)
+library(ggplot2)
+library(ggformula)
+library(gridExtra)
+
+```
+
+### Load data {-}
+
+```{r eval=FALSE}
+# data layers
+load("1_data/manual/slope_clip.rdata")  
+load("1_data/manual/study_area.rdata")
+load("3_pipeline/tmp/pp_s_clip_clus.rData")
+load("1_data/manual/UPLVI_clip.rdata")
+load("1_data/manual/corridors_clip.rData")
+load("1_data/manual/can_poly_clip.rData")
+
+
+# base layers
+load("1_data/manual/nscr.rdata")  
+load("1_data/manual/v_road_clip.rdata")
+
+```
+
+ 
+### Define cross-section lines {-}
+
+I created routes falling trails along the north and south sides of the N. Saskatchewan river. These will be used as the basis for the profile plot. 
+
+```{r eval=FALSE}
+r_north<-st_read("1_data/external/cross_section_route/river_north.gpx", layer="routes")
+r_south<-st_read("1_data/external/cross_section_route/river_south.gpx", layer="routes")
+
+r_north<-st_transform(r_north, crs = st_crs(3776))
+r_south<-st_transform(r_south, crs = st_crs(3776))
+
+#Clip line to study area
+r_north<-st_intersection(r_north, study_area)
+r_south<-st_intersection(r_south, study_area)
+
+
+library(OpenStreetMap)
+base<-read_osm(study_area, type="bing")
+# plot
+m1<-
+   tm_shape(base) + tm_rgb()+ 
+  tm_shape(study_area)+
+    tm_fill(col="white", alpha=.2)+
+  #tm_shape(v_road_clip)+tm_lines(col="white")+
+  #tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(r_north)+
+    tm_lines(col="blue")+
+  tm_shape(r_south)+
+    tm_lines(col="red")+
+  tm_layout(legend.outside = FALSE, legend.text.size = .6, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8)
+)
+m1
+
+tmap_save(m1, "4_output/maps/cross_lines_map.png", outer.margins=c(0,0,0,0))
+```
+
+```{r echo=FALSE, fig.cap= "Routes for cross-sectional map.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cross_lines_map.png")
+```
+
+
+### Extract north cross-section {-}
+
+#### Pinch points {-}
+
+```{r eval=FALSE}
+
+# rasterize pinch-point polygons
+pp<-rasterize(pp_s_clip_clus, slope_clip, 'group')
+
+# transform to lat long (for calculating distance along the line)
+r_north_t <- st_transform(r_north, "+proj=longlat +datum=WGS84")
+slope_clip_t<- projectRaster(slope_clip, crs="+proj=longlat +datum=WGS84" )
+
+pp<- projectRaster(pp, crs="+proj=longlat +datum=WGS84" )
+
+pp_trans = raster::extract(pp, r_north, buffer=15, along = TRUE, cellnumbers = TRUE, na.rm=TRUE)
+
+pp_trans_df = purrr::map_dfr(pp_trans, as_data_frame, .id = "ID")
+pp_trans_coords = xyFromCell(slope_clip_t, pp_trans_df$cell)
+
+# calculate distance between pairs of points
+pair_dist = geosphere::distGeo(pp_trans_coords)[-nrow(pp_trans_coords)]
+pp_trans_df$dist_km = c(0, cumsum(pair_dist/1000))
+
+pp_trans_df<-distinct(pp_trans_df)
+pp_trans_df<-rename(pp_trans_df, pp=layer)
+
+pp_trans_df<-subset(pp_trans_df, !is.na(pp))
+pp_trans_df$pp<-as.character(pp_trans_df$pp)
+
+pp_trans_df_group <-
+  pp_trans_df %>% 
+  group_by(pp) %>% 
+  summarise(dist_km = median(dist_km))
+
+custom_theme<-function(){theme(
+        panel.background = element_rect(fill = "white",
+                size = 0.5),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.line.x = element_line(colour = "#636363", arrow = arrow(angle = 15, length = unit(.15,"inches"),type = "closed") ),
+        axis.title.x = element_text(colour="#636363"),
+        legend.title = element_text(colour="#636363"),
+        legend.text = element_text(colour="#636363"),
+        panel.grid.major = element_line(size = 0.0),
+        panel.grid.minor = element_line(size = 0.0))}
+
+
+ggplot(data = slope_trans_df, aes(x=dist_km))+
+          geom_area(data=pp_trans_df,  aes(y=31, x=dist_km, fill=pp))+
+          scale_fill_brewer(palette="Pastel2")+
+          geom_text(data=pp_trans_df_group,  aes(y=31, x=dist_km, label=pp), 
+            position = position_stack(vjust = 1.04), check_overlap = TRUE, size=2.5, col="#636363")+
+          xlim(0, 21)+
+          xlab("distance (km)")+
+          labs(fill="pinch-point")+
+           custom_theme()
+
+ggsave(filename=paste0("4_output/maps/cross_section/pp_n_fig.png"), width =12, height=4)
+```
+
+```{r echo=FALSE, fig.cap= "Pinch-points along northern cross-section line.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cross_section/pp_n_fig.png")
+```
+
+
+#### Slope {-}
+
+```{r eval=FALSE}
+
+#### North side #######
+
+
+# transform to lat long (for calculating distance along the line)
+slope_clip_t<- projectRaster(slope_clip, crs="+proj=longlat +datum=WGS84" )
+
+
+slope_trans = raster::extract(slope_clip_t, r_north_t, buffer=15, along = TRUE, cellnumbers = TRUE)
+
+slope_trans_df = purrr::map_dfr(slope_trans, as_data_frame, .id = "ID")
+slope_trans_coords = xyFromCell(slope_clip_t, slope_trans_df$cell)
+
+pair_dist = geosphere::distGeo(slope_trans_coords)[-nrow(slope_trans_coords)]
+slope_trans_df$dist_km = c(0, cumsum(pair_dist/1000))
+
+slope_trans_df<-distinct(slope_trans_df)
+
+#road_trans_df<-rename(road_trans_df, dist_road=layer)
+
+save(slope_trans_df, file="3_pipeline/tmp/slope_trans_df")
+
+# # add pinch point locations to data frame
+# slope_trans_df<-left_join(slope_trans_df, pp_trans_df, by="cell")
+# slope_trans_df$ppn<-as.numeric(slope_trans_df$pp)
+# slope_trans_df$pp[is.na(slope_trans_df$pp)] <- ""
+# slope_trans_df<-slope_trans_df[-c(5,7:8)]
+
+# slope_sub<-subset(slope_trans_df, !is.na(pp))
+
+pp_trans_df_group <-
+  pp_trans_df %>% 
+  group_by(pp) %>% 
+  summarise(dist_km = median(dist_km))
+  
+xSum<-as.data.frame(pp_s_clip_clus) %>%
+  group_by(group)%>%
+  summarize(mean=mean(area))%>%
+  mutate(proportion=as.numeric(mean/sum(mean)))
+
+# get centroid of pp clusters. Centroid points will be used as text labels
+cent_label<-sf::st_centroid(pp_s_clip_clus)
+
+
+custom_theme<-function(){theme(
+        panel.background = element_rect(fill = "white",
+                size = 0.5),
+        axis.line.y=element_line(colour="#636363"),
+        axis.title.y = element_text(colour="#636363"),
+        axis.title.x = element_text(colour="#636363"),
+        axis.line.x = element_line(colour = "#636363", arrow = arrow(angle = 15, length = unit(.15,"inches"),type = "closed") ),
+        legend.title = element_text(colour="#636363"),
+        legend.text = element_text(colour="#636363"),
+        panel.grid.major = element_line(size = 0.0),
+        panel.grid.minor = element_line(size = 0.0))}
+
+     
+gSlope<-ggplot(data = slope_trans_df, aes(x=dist_km))+
+          stat_spline(aes(y=slope), geom="area", fill="#1c9099", col="#1c9099", alpha=0.6)+
+          geom_area(data=pp_trans_df,  aes(y=31.8, x=dist_km, fill=pp), colour="black", linetype=1, position="stack", alpha=0, 
+                    outline.type = "full", show.legend=FALSE)+
+          #geom_area(data=pp_trans_df,  aes(y=31, x=dist_km, fill=pp), show.legend=FALSE)+
+          #scale_fill_brewer(palette="Pastel2")+
+          geom_text(data=pp_trans_df_group,  aes(y=32, x=dist_km, label=pp), 
+            position = position_stack(vjust = 1.04), check_overlap = TRUE, size=2.5, col="#636363")+
+          #geom_spline(aes(y=slope), col="#1c9099")+
+        
+          xlab("distance (km)")+
+          ylab("slope")+
+          labs(fill="pinch-point")+
+          xlim(0, 20)+
+           custom_theme()
+ gSlope    
+    
+ ggsave("4_output/maps/cross_section/slope_fig_N.png", gSlope, width =12, height=4)
+
+    
+m4<-
+   tm_shape(base) + tm_rgb()+ 
+  tm_shape(study_area)+
+    tm_fill(col="white", alpha=.2)+
+  # tm_shape(v_road_clip)+tm_lines(col="white")+
+  # tm_layout(bg.col="#d9d9d9")+
+  tm_shape(corridors_clip)+
+   tm_fill(col="#238b45", alpha = .5)+
+   tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus)  +
+    tm_fill(col="#fb6a4a", alpha=.6)+
+    tm_borders(alpha=1)+
+  tm_shape(r_north)+
+    tm_lines(col="white", lwd=10, alpha = .4)+
+  tm_shape(r_north)+
+    tm_lines(col="#045a8d", lwd=2)+
+  tm_shape(cent_label)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.1)+
+  tm_add_legend(type="fill",
+          group = "Charts",
+          labels = c("Grass", "Shrub-Dec", "Tree-Con", "Tree-Dec"),
+          col=c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"),
+          title="Class")+
+  tm_layout(legend.show=FALSE, legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8,
+          legend.position=c("left", "bottom"))
+
+m4
+
+t_grob<-tmap_grob(m4) 
+
+# convert map to grob object
+g1<-arrangeGrob(t_grob)   
+    
+
+lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(2))   
+
+g3<-arrangeGrob(g1, gSlope, layout_matrix =lay2)
+
+ggsave("4_output/maps/cross_section/slope_map_N.png", g3, width=11, height=9)
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Profile of slope along northern the cross-section line.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cross_section/slope_map_N.png")
+```
+
+
+#### Distance to road {-}
+
+```{r eval=FALSE}
+load("3_pipeline/tmp/dist2road.rData")
+
+road_clip_t<- projectRaster(r, crs="+proj=longlat +datum=WGS84" )
+
+road_trans = raster::extract(road_clip_t, r_north_t, buffer=15, along = TRUE, cellnumbers = TRUE)
+
+road_trans_df = purrr::map_dfr(road_trans, as_data_frame, .id = "ID")
+road_trans_coords = xyFromCell(road_clip_t, road_trans_df$cell)
+
+pair_dist = geosphere::distGeo(road_trans_coords)[-nrow(road_trans_coords)]
+road_trans_df$dist_km = c(0, cumsum(pair_dist/1000))
+
+road_trans_df<-distinct(road_trans_df)
+
+road_trans_df<-rename(road_trans_df, dist_road=layer)
+
+save(road_trans_df, file="3_pipeline/tmp/road_trans_df")
+
+
+custom_theme<-function(){theme(
+        panel.background = element_rect(fill = "white",
+                size = 0.5),
+        axis.line.y=element_line(colour="#636363"),
+        axis.title.y = element_text(colour="#636363"),
+        axis.title.x = element_text(colour="#636363"),
+        axis.line.x = element_line(colour = "#636363", arrow = arrow(angle = 15, length = unit(.15,"inches"),type = "closed") ),
+        legend.title = element_text(colour="#636363"),
+        legend.text = element_text(colour="#636363"),
+        panel.grid.major = element_line(size = 0.0),
+        panel.grid.minor = element_line(size = 0.0))}
+
+     
+groad<-ggplot(data = road_trans_df, aes(x=dist_km))+
+          stat_spline(aes(y=dist_road), geom="area", fill="#045a8d",col="#045a8d", alpha=0.6)+        
+          geom_area(data=pp_trans_df,  aes(y=450, x=dist_km, fill=pp), colour="black", linetype=1, position="stack", alpha=0, 
+                    outline.type = "full", show.legend=FALSE)+
+          geom_text(data=pp_trans_df_group,  aes(y=451, x=dist_km, label=pp), 
+            position = position_stack(vjust = 1.04), check_overlap = TRUE, size=2.5, col="#636363")+
+          #geom_spline(aes(y=dist_road),col="#045a8d")+
+          xlab("distance (km)")+
+          ylab("distance to road (m)")+
+          labs(fill="pinch-point")+
+           xlim(0, 20)+
+           custom_theme()
+ groad    
+    ggsave("4_output/maps/cross_section/road_fig_N.png", groad, width =12, height=4)
+    
+    
+lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(2))   
+
+g3<-arrangeGrob(g1, groad, layout_matrix =lay2)
+
+ggsave("4_output/maps/cross_section/road_map_N.png", g3, width=11, height=9)
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Profile of distance to road along northern the cross-section line.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cross_section/road_map_N.png")
+```
+
+
+
+#### UPLVI {-}
+
+
+##### STYPE {-}
+
+```{r eval=FALSE}
+
+##rasterize UPLVI shape file
+
+# merge UPLVI STYPE layers
+dat<-UPLVI_clip
+
+# get names
+nam <- unique(dat$STYPE1)
+
+# create a data.frame
+nam_df <- data.frame(ID = 1:length(nam), nam = nam)
+
+# Place IDs
+dat$ID <- nam_df$ID[match(dat$STYPE1, nam_df$nam)]
+
+# Define RasterLayer object
+r.raster <- raster()
+
+# Define raster extent
+extent(r.raster) <- extent(dat)
+
+# Define pixel size
+res(r.raster) <- 5
+
+#define crs
+crs(r.raster)<-crs(dat) 
+
+
+# rasterize
+#ras <- rasterize(x = dat, y = slope_clip, field = "ID")
+ras <- rasterize(x = dat, y = r.raster, field = "ID")
+
+r<- projectRaster(ras, crs="+proj=longlat +datum=WGS84", method='ngb')
+
+# ratify raster
+r <- ratify(r)
+
+# Create levels
+rat <- levels(r)[[1]]
+rat$names <- nam_df$nam
+rat$IDs <- nam_df$ID
+levels(r) <- rat
+
+
+
+save(r, file="3_pipeline/tmp/UPLVI_STYPE_raster.rData")
+
+UPLVI_trans = raster::extract(r, r_north_t, along = TRUE, factors=TRUE, cellnumbers = TRUE)
+
+
+
+UPLVI_trans_df = purrr::map_dfr(UPLVI_trans, as_data_frame, .id = "ID")
+UPLVI_trans_coords = xyFromCell(r, UPLVI_trans_df$cell)
+
+# calculate distance between pairs of points
+pair_dist = geosphere::distGeo(UPLVI_trans_coords)[-nrow(UPLVI_trans_coords)]
+UPLVI_trans_df$dist_km = c(0, cumsum(pair_dist/1000))
+
+#rename level column
+UPLVI_trans_df<-rename(UPLVI_trans_df, STYPE_level=layer)
+
+#join with fator names
+UPLVI_trans_df<-left_join(UPLVI_trans_df, nam_df, by=c("STYPE_level"="ID"))
+
+#rename nam column
+UPLVI_trans_df<-rename(UPLVI_trans_df, STYPE=nam)
+
+# remove duplicate rows
+UPLVI_trans_df<-distinct(UPLVI_trans_df)
+
+UPLVI_trans_df<-subset(UPLVI_trans_df, !is.na(STYPE))
+
+# UPLVI_trans_df_group <-
+#   UPLVI_trans_df %>% 
+#   group_by(STYPE) %>% 
+#   summarise(dist_km = median(dist_km))
+
+custom_theme<-function(){theme(
+        panel.background = element_rect(fill = "white",
+                size = 0.5),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.line.x = element_line(colour = "#636363", arrow = arrow(angle = 15, length = unit(.15,"inches"),type = "closed") ),
+        axis.title.x = element_text(colour="#636363"),
+        legend.title = element_text(colour="#636363"),
+        legend.text = element_text(colour="#636363"),
+        legend.background = element_blank(),
+        legend.key = element_blank(),
+        legend.position="bottom",
+        legend.box="horizontal",
+        legend.box.background = element_blank(),
+        panel.grid.major = element_line(size = 0.0),
+        panel.grid.minor = element_line(size = 0.0))}
+
+gSTYPE<-ggplot(data = UPLVI_trans_df)+
+          #geom_area(data=UPLVI_trans_df, aes(y=31, x=dist_km, fill=STYPE))+
+          geom_segment(data=UPLVI_trans_df, aes(x=dist_km, y=31, xend= dist_km, yend = 0, col=STYPE))+
+          geom_area(data=pp_trans_df,  aes(y=31.8, x=dist_km, fill=pp), colour="black", linetype=1, position="stack", alpha=0, 
+                    outline.type = "full", show.legend=FALSE)+
+           geom_text(data=pp_trans_df_group,  aes(y=31.5, x=dist_km, label=pp),
+            position = position_stack(vjust = 1.04), check_overlap = TRUE, size=2.5, col="#636363")+
+          #geom_text(aes(y=36, x=14, label="pinch-point"),size=3, col="#636363")+
+          xlim(0, 21)+
+          xlab("distance (km)")+
+          guides(fill=guide_legend(nrow=2))+
+          labs(color ="STYPE:")+
+          custom_theme()+
+          xlim(0, 20)+
+          guides(color=guide_legend(nrow=1))#+
+          #ggtitle("UPVLI STYPE")
+
+gSTYPE
+
+ggsave("4_output/maps/cross_section/UPLVI_stype_trans_fig.png", gSTYPE, width =12, height=8)
+
+lay2 <- rbind(c(1),
+              c(1),
+              c(2))   
+
+g3<-arrangeGrob(g1, gSTYPE, layout_matrix =lay2)
+
+ggsave("4_output/maps/cross_section/UPLVI_stype_trans_map.png", g3, width=11, height=9)
+
+````
+
+```{r echo=FALSE, fig.cap= "UPLVI STYPE along northern cross-section line.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cross_section/UPLVI_stype_trans_map.png")
+```
+
+
+#### Canopy {-}
+
+
+```{r eval=FALSE}
+
+##rasterize UPLVI shape file
+
+# merge canopy STYPE layers
+dat<-can_poly_clip
+
+# to speed up processing clip to within buffer of cross line
+dat<-st_intersection(dat, st_buffer(r_north, 20))
+
+# get names
+nam <- unique(dat$Class)
+
+# create a data.frame
+nam_df <- data.frame(ID = 1:length(nam), nam = nam)
+
+# Place IDs
+dat$ID <- nam_df$ID[match(dat$Class, nam_df$nam)]
+
+# Define RasterLayer object
+r.raster <- raster()
+
+# Define raster extent
+extent(r.raster) <- extent(dat)
+
+# Define pixel size
+res(r.raster) <- 10
+
+#define crs
+crs(r.raster)<-crs(dat) 
+
+
+# rasterize
+#ras <- rasterize(x = dat, y = slope_clip, field = "ID")
+ras <- rasterize(x = dat, y = r.raster, field = "ID")
+
+# ratify raster
+r <- ratify(ras)
+
+# Create levels
+rat <- levels(r)[[1]]
+rat$names <- nam_df$nam
+rat$IDs <- nam_df$ID
+levels(r) <- rat
+
+r<- projectRaster(r, crs="+proj=longlat +datum=WGS84", method='ngb' )
+
+
+save(r, file="3_pipeline/tmp/canopy_n_r.rData")
+#save(r, file="3_pipeline/tmp/canopy_r.rData")
+
+canopy_trans = raster::extract(r, r_north_t, along = TRUE, factors=TRUE, cellnumbers = TRUE, na.rm=TRUE)
+
+
+
+canopy_trans_df = purrr::map_dfr(canopy_trans, as_data_frame, .id = "ID")
+canopy_trans_coords = xyFromCell(r, canopy_trans_df$cell)
+
+# calculate distance between pairs of points
+pair_dist = geosphere::distGeo(canopy_trans_coords)[-nrow(canopy_trans_coords)]
+canopy_trans_df$dist_km = c(0, cumsum(pair_dist/1000))
+
+#rename level column
+canopy_trans_df<-rename(canopy_trans_df, Class_level=layer)
+
+#join with fator names
+canopy_trans_df<-left_join(canopy_trans_df, nam_df, by=c("Class_level"="ID"))
+
+#rename nam column
+canopy_trans_df<-rename(canopy_trans_df, Class=nam)
+
+# remove duplicate rows
+canopy_trans_df<-distinct(canopy_trans_df)
+
+canopy_trans_df<-subset(canopy_trans_df, !is.na(Class))
+
+# canopy_trans_df_group <-
+#   canopy_trans_df %>% 
+#   group_by(Class) %>% 
+#   summarise(dist_km = median(dist_km))
+
+custom_theme<-function(){theme(
+        panel.background = element_rect(fill = "white",
+                size = 0.5),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        # axis.text.y = element_text(colour = "white"),
+        # axis.ticks.y = element_line(colour="white"),
+        # axis.line.y=element_line(colour="white"),
+        # axis.title.y = element_text(colour = "white"),
+        axis.line.x = element_line(colour = "#636363", arrow = arrow(angle = 15, length = unit(.15,"inches"),type = "closed") ),
+        axis.title.x = element_text(colour="#636363"),
+        legend.title = element_text(colour="#636363"),
+        legend.text = element_text(colour="#636363"),
+        legend.background = element_blank(),
+        legend.key = element_blank(),
+        legend.box.background = element_blank(),
+        legend.position="bottom",
+        panel.grid.major = element_line(size = 0.0),
+        panel.grid.minor = element_line(size = 0.0))}
+
+
+gClass<-ggplot(data = canopy_trans_df)+
+          geom_segment(data=canopy_trans_df, aes(x=dist_km, y=31, xend= dist_km, yend = 0, col=Class))+
+          geom_area(data=pp_trans_df,  aes(y=31.8, x=dist_km, fill=pp), colour="black", linetype=1, position="stack", alpha=0, 
+                    outline.type = "full", show.legend=FALSE)+
+          geom_text(data=pp_trans_df_group,  aes(y=32, x=dist_km, label=pp),
+            position = position_stack(vjust = 1.04), check_overlap = TRUE, size=2.5, col="#636363")+
+          #geom_text(aes(y=36, x=14, label="pinch-point"), size=3, col="#636363")+
+          xlim(0,21)+
+          xlab("distance (km)")+
+          labs(colour="Vegetation type:")+
+          xlim(0, 20)+
+          custom_theme()#+
+          #ggtitle("Vegetation type")
+
+gClass
+
+
+ggsave("4_output/maps/cross_section/canopy_Class_trans_fig.png", gClass, width =12, height=8)
+
+lay2 <- rbind(c(1),
+              c(1),
+              c(2))   
+
+g3<-arrangeGrob(g1, gClass, layout_matrix =lay2)
+
+ggsave("4_output/maps/cross_section/canopy_Class_trans_map.png", g3, width=11, height=9)
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Vegetation classes along northern cross-section line.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cross_section/canopy_Class_trans_map.png")
+```
+
+#### Combine {-}
+
+```{r eval=FALSE}
+layall <- rbind(c(1),
+              c(1),
+              c(1),
+              c(2),
+              c(3),
+              c(4),
+              c(5))
+
+gAll_N<-arrangeGrob(g1, groad, gSlope, gSTYPE, gClass,  layout_matrix =layall)
+
+ggsave("4_output/maps/cross_section/n_cross_section_map.png", gAll_N, width=12, height=18)
+
+```
+
+
+
+```{r echo=FALSE, fig.cap= "Cross-section map.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/cross_section/n_cross_section_map.png")
+```
+
+
+

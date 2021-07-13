@@ -391,6 +391,8 @@ knitr::include_graphics("4_output/maps/pp_s_clus_buf_map.png")
 pp_s_clip_clus_buf_ext<-st_buffer(st_boundary(pp_s_clip_clus), dist= 30, singleSide = TRUE,  endCapStyle = "ROUND",
   joinStyle = "ROUND")
 
+#create a unique ID column
+pp_s_clip_clus_buf_ext<-cbind(ID=1:nrow(pp_s_clip_clus_buf_ext), pp_s_clip_clus_buf_ext)
 save(pp_s_clip_clus_buf_ext, file="3_pipeline/store/pp_s_clip_clus_buf_ext.rData")
 
 ## plot buffered clusters

@@ -1,0 +1,557 @@
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 500px;
+}
+```
+
+
+```{r eval=FALSE}
+library(dplyr)
+library(sf)
+library(tmap)
+library(tmaptools)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+```
+
+### Load data {-}
+
+#### Biophisical data {-}
+
+Load prepared and clipped biophysical layers.
+
+```{r eval=FALSE}
+# UPLVI
+load("1_data/manual/UPLVI_clip.rData")
+
+# vegetation derived from canopy raster
+load("1_data/manual/can_poly_clip.rData")
+
+# bridges
+load("1_data/manual/bridges_clip.rData")
+
+# picnic sites
+load("1_data/manual/picnic_clip.rData")
+
+# playgrounds
+load("1_data/manual/playgrounds_clip.rData")
+
+# sports fields
+load("1_data/manual/sports_fields_clip.rData")
+
+# stairs
+load("1_data/manual/stairs_clip.rData")
+
+# trails
+load("1_data/manual/trails_clip.rData")
+
+# roads
+load("1_data/manual/road_ws_clip.rData")
+
+# curbs
+load("1_data/manual/curbs_clip.rData")
+```
+
+
+#### Pinch-points {-}
+
+Load buffered pinch-point polygons
+
+```{r eval=FALSE}
+
+# buffered pinch point polygons
+load("3_pipeline/store/pp_s_clip_clus_buf_ext.rData")
+
+# pinch point clusters
+load("3_pipeline/tmp/pp_s_clip_clus.rData")
+
+# buffered pinchpoints
+load("3_pipeline/store/pp_s_clip_clus_buf.rData")
+```
+
+#### Base layers {-}
+
+Load baselayers to be used for visualization maps.
+
+```{r eval=FALSE}
+
+# roads
+load("1_data/manual/v_road_clip.rdata")
+
+# load polygon representing North Central Region of Saskatchewan region of the ribbon of green
+load("1_data/manual/nscr.rdata") 
+```
+
+
+#### Intersect polygon layers with pinch points {-}
+
+Intersect the spatial covariates with the pinch-point buffer polygons. Then calculate the area of the all of the new clipped polygons generated.
+
+```{r eval=FALSE}
+# list objects to individually intersect by the pinchpoints
+x<-list(UPLVI_clip, can_poly_clip, picnic_clip, playgrounds_clip, sports_fields_clip)
+names(x)<-c("UPLVI_int", "can_poly_int", "picnic_int", "playgrounds_int", "sports_fields_int")
+
+# calculate the area of the buffered pinchpoints
+pp_s_clip_clus_buf_ext$buf_area<-st_area(pp_s_clip_clus_buf_ext)
+
+
+#apply the following to all the layers
+nx<-lapply(x, function(x) 
+  {
+  a<-st_intersection(x, pp_s_clip_clus_buf_ext) 
+  cbind(a, "int_area"=st_area(a)) #calculate area of new clipped polygons
+  })
+
+#save new intersection objects
+lapply(names(nx),function(x)
+  { assign(x,nx[[x]])
+  save(list=x, file=paste("3_pipeline/tmp/", x, ".rdata", sep = ""))
+  })
+
+# put intersection objects into the global environment
+list2env(nx, .GlobalEnv)
+
+
+##################################################################
+# generate plots to illustrate
+m1<-
+  tm_shape(UPLVI_clip)+
+    tm_fill(col="LANDCLAS1", palette = "Dark2", contrast = c(0.26, 1),alpha = .3, legend.show = FALSE) +
+  tm_shape(v_road_clip)+tm_lines(col="white", lwd=1)+
+  #tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#636363")+
+    #tm_borders(col = "#636363")
+  tm_shape(UPLVI_int)+
+    tm_fill(col="LANDCLAS1", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, title="Land Classification", labels = c("Developed","Modified", "Natural", "Naturally Wooded", "Naturally Non-Wooded"))+
+  tm_shape(pp_s_clip_clus_buf_ext)+
+    tm_borders(col = "#636363",
+               lwd= .5)+
+  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
+m1
+
+tmap_save(m1, "4_output/maps/UPLVI_int_map.png", outer.margins=c(0,0,0,0))
+
+# convert geometry to polygons so can_poly_int plots properly
+can_poly_int<-st_collection_extract(can_poly_int, "POLYGON")
+
+m2<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#636363")+
+  tm_shape(can_poly_clip)+
+    tm_fill(col="Class", palette = "Dark2", contrast = c(0.26, 1),alpha = .3, legend.show = FALSE)+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.7)+
+    tm_borders(col = "#636363")+
+    #tm_borders(col = "#636363")
+  tm_shape(can_poly_int)+
+    tm_fill(col="Class", palette = "Dark2", contrast = c(0.26, 1),alpha = 1, title="Vegetation class")+
+  tm_shape(pp_s_clip_clus_buf_ext)+
+    tm_borders(col = "#636363",
+               lwd= .5)+
+  tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE,legend.title.size=1, legend.frame.lwd=.8)
+m2
+
+tmap_save(m2, "4_output/maps/can_poly_int_map.png", outer.margins=c(0,0,0,0))
+```
+
+```{r echo=FALSE, fig.cap= "UPLVI clipped to pinchpoint buffers.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/UPLVI_int_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Canopy polygons clipped to pinchpoint buffers.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/can_poly_int_map.png")
+```
+
+
+### Calculate proportion of cover {-}
+
+#### From canopy polygons {-}
+
+```{r eval=FALSE}
+load("3_pipeline/tmp/can_poly_int.rData")
+
+# convert geometry to polygons so can_poly_int plots properly
+can_poly_int<-st_collection_extract(can_poly_int, "POLYGON")
+
+x<-can_poly_int
+xSum<-as.data.frame(x) %>%
+  group_by(group, Class)%>%
+  summarize(mean=mean(int_area))%>%
+  mutate(proportion=as.numeric(mean/sum(mean)))
+
+can_poly_cov<-xSum
+
+save(can_poly_cov, file="3_pipeline/store/can_poly_cov.rData")
+
+
+xSum<-inner_join(pp_s_clip_clus_buf, xSum, by=c("group"="group"))
+xSum$group<-as.factor(xSum$group)
+
+
+######################### Plot with barplots as icons   ##############################
+
+# get color pallette
+origin_cols<- c("Grass"= "#1b9e77", "Shrub-Dec"="#d95f02", "Tree-Con"="#7570b3", "Tree-Dec"="#e7298a")
+
+# create bar plots in ggplot convert to grob objects which will be plotted in tmap.
+grobs <- lapply(split(xSum, factor(xSum$group)), function(x) {
+ggplotGrob(ggplot(x, aes("", y=proportion, fill=Class, label = group)) +
+    geom_bar(width=1, stat="identity", colour="black", lwd=.2) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_fill_manual(values=origin_cols) +
+    theme_ps(plot.axes = FALSE)
+)
+}
+)
+
+
+m3<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(xSum)  +
+    tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.6)+
+    tm_borders(alpha=1)+
+    tm_symbols(shape="group",
+        shapes=grobs,
+        border.lwd = 0,
+          #sizes.legend=c(.5, 1,3)*1e6,
+          scale=.6,
+        clustering=TRUE,
+          legend.shape.show = FALSE,
+          legend.size.is.portrait = TRUE,
+          # shapes.legend = 22,
+          # group = "Charts",
+        #id = "group",
+        breaks = "fixed",
+      labels = "Class")+
+#         popup.vars = c("NVE", "VEG"))
+  #tm_shape(pp_s_clip_clus_buf)+
+
+  #tm_text(text = "group")+
+tm_add_legend(type="fill",
+          group = "Charts",
+          labels = c("Grass", "Shrub-Dec", "Tree-Con", "Tree-Dec"),
+          col=c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"),
+          title="Class")+
+tm_layout(legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8,
+          legend.position=c("left", "top"))
+m3
+
+tmap_save(m3, "4_output/maps/summary/can_poly_sum_map.png", outer.margins=c(0,0,0,0))
+
+############################# barplots under the map ############################
+
+m4<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus)  +
+    tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.8)+
+    tm_borders(alpha=1)+
+   tm_shape(xSum)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.5)+
+          # bg.color="white",
+          # bg.alpha=.1)+
+ # tm_shape(pp_s_clip_clus)  +
+ #   tm_polygons()+
+ #     tm_borders(
+ #       col = "red",
+ #       )+
+tm_add_legend(type="fill",
+          group = "Charts",
+          labels = c("Grass", "Shrub-Dec", "Tree-Con", "Tree-Dec"),
+          col=c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"),
+          title="Class")+
+tm_layout(legend.show=FALSE, legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8,
+          legend.position=c("left", "bottom"))
+
+m4
+
+t_grob<-tmap_grob(m4)
+
+# convert map to grob object
+g1<-arrangeGrob(t_grob)
+
+g2<-xSum%>%
+    ggplot(aes(x = group, y = proportion, fill=Class, label = group)) +
+    geom_bar(width=.8, stat="identity", colour="black", lwd=.2) +
+    labs(x="pinch-point", y="% cover")+
+    scale_y_continuous(labels=scales::percent) +
+    theme(panel.spacing = unit(1, "lines"),
+          panel.background = element_blank(),
+          axis.ticks=element_blank())
+
+ lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(2))   
+
+g3<-arrangeGrob(g1, g2, layout_matrix =lay2)
+ggsave("4_output/maps/summary/can_poly_sum_map_2.png", g3, width=11, height=9)
+
+```
+
+```{r echo=FALSE, fig.cap= "Canopy poly class map #1.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/can_poly_sum_map.png")
+```
+
+```{r echo=FALSE, fig.cap= "Canopy poly class map #2.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/can_poly_sum_map_2.png")
+```
+
+#### From UPLVI {-}
+
+`Extract STYPE values for each polygon. Include area and percentage per STYPE
+```{r eval=FALSE}
+load("3_pipeline/tmp/UPLVI_int.rData")
+
+# create a new dataframe with only necessary columns
+
+TYPE<-as.data.frame(UPLVI_int[c(1,61:62, 4:7, 23:26, 42:45, 63:64)])
+
+#seperate STYPPE ranks into seperate dataframes
+a<-TYPE[c(1:3, 4:7, 16:17)]
+b<-TYPE[c(1:3, 8:11, 16:17)]
+c<-TYPE[c(1:3, 12:15, 16:17)]
+
+# rename columns so they are constant
+b<-setNames(b, names(a))
+c<-setNames(c, names(a))
+
+#rbind dataframes together
+abc<-rbind(a, b, c)
+
+# create a column with just rank number of STYPES
+s_rank<-gather(TYPE, "STYPE_rank", "STYPE", c(4,8,12))
+
+# add the rank column
+abcf<-cbind(abc, s_rank$STYPE_rank)
+
+#reorder columns
+abcf<-abcf[c(1:3, 8, 4:7)]
+
+# rename columns
+colnames(abcf)[c(4:7, 10)]<-c("PRIMECLAS", "LANDCLAS", "STYPE", "STYPEPER", "s_rank")
+
+# approximate area of each STYPE class/ polygon by multipltying the percentage by polygon area. Creates a new column
+# calculate proportion of each polygon covered by STYPE class
+
+# here is a way to loop through a bunch of column
+v<- abcf[4:6] #select the columns that you want to use for landcover data
+vnames <- colnames(v)
+a <- list()
+j = 1
+for (i in v) {
+  a[[j]] <- abcf %>%
+    group_by(POLY_NUM, ID, {{i}})%>%
+    mutate(s_area=as.numeric((STYPEPER*.1)*int_area))%>%
+    group_by(ID, {{i}})%>%
+    mutate(t_area=sum(s_area))%>%
+    select(-s_rank, -STYPEPER, -s_area, -int_area, -POLY_NUM, -group, -LANDCLAS,-STYPE, -PRIMECLAS)%>%
+    distinct()%>%
+    na.omit()%>%
+    mutate(t_proportion=as.numeric(t_area/buf_area))%>%
+    select(-buf_area)%>%
+    arrange(ID)
+  names(a)[j]=vnames[j] #name list item
+  colnames(a[[j]])[2]<- vnames[j] # name variable column
+  #a[[j]]$vnames = vnames[j]
+  j = j + 1
+}
+a
+
+UPLVI_class_cov<-a
+
+save(UPLVI_class_cov, file="3_pipeline/store/UPLVI_class_cov.rData")
+
+
+# #non loop, one variable at a time
+# STYPE_area<-
+#   abcf %>%
+#   group_by(POLY_NUM, ID, STYPE)%>%
+#   mutate(s_area=as.numeric((STYPEPER*.1)*int_area))%>%
+#   group_by(ID, STYPE)%>%
+#   mutate(t_area=sum(s_area))%>%
+#   select(-s_rank, -STYPEPER, -s_area, -int_area, -POLY_NUM, -group)%>%
+#   distinct()%>%
+#   na.omit()%>%
+#   mutate(t_proportion=as.numeric(t_area/buf_area))%>%
+#   select(-buf_area)%>%
+#   arrange(ID)
+#   #group_by(ID)%>%
+#   #mutate(t_proportion_sum=sum(t_proportion)) 
+# 
+# save(STYPE_area, file="3_pipeline/store/STYPE_area.rData")
+
+
+######################################################################
+
+# # function that that calculates proportions
+# x_summary<-function(x) {
+#   df %>%
+#   group_by(ID, {{x}})%>%
+#   summarize(mean=mean(area))%>%
+#   mutate(proportion=as.numeric(mean/sum(mean)))
+# }
+# 
+# # here is a way to loop through a bunch of column
+# v<- df[4:6] #select the columns that you want to use for landcover data
+# vnames <- colnames(v)
+# a <- list()
+# j = 1
+# for (i in v) {
+#   a[[j]] <- df %>%
+#     group_by(ID, {{i}})%>%
+#     summarize(mean=mean(area))%>%
+#     mutate(proportion=as.numeric(mean/sum(mean)))
+#   names(a)[j]=vnames[j] #name list item
+#   colnames(a[[j]])[2]<- vnames[j] # name variable column
+#   a[[j]]$vnames = vnames[j]
+#   j = j + 1
+# }
+# a
+
+```
+
+```{r echo=FALSE, results='asis'}
+
+load("3_pipeline/store/UPLVI_class_cov.rData")
+
+knitr::kable(UPLVI_class_cov$STYPE, booktabs=TRUE) %>%
+  kable_styling(font_size = 10, bootstrap_options= c("striped", "hover", "condensed" ), full_width= F, position="center") %>%
+  scroll_box(height="200px")
+
+```
+
+
+
+Visualize
+
+```{r eval=FALSE}
+m5<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+  tm_shape(pp_s_clip_clus)  +
+    tm_fill(col="MAP_COLORS", palette = "Dark2", alpha=.8)+
+    tm_borders(alpha=1)+
+   tm_shape(pp_s_clip_clus_buf)+
+    tm_text(text = "group",
+          col="black",
+          size = 1.5)+
+          # bg.color="white",
+          # bg.alpha=.1)+
+ # tm_shape(pp_s_clip_clus)  +
+ #   tm_polygons()+
+ #     tm_borders(
+ #       col = "red",
+ #       )+
+tm_add_legend(type="fill",
+          group = "Charts",
+          labels = c("Grass", "Shrub-Dec", "Tree-Con", "Tree-Dec"),
+          col=c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"),
+          title="Class")+
+tm_layout(legend.show=FALSE, legend.outside = FALSE, legend.text.size = .8, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8,
+          legend.position=c("left", "bottom"))
+
+m5
+
+t_grob<-tmap_grob(m5)
+
+# convert map to grob object
+g1<-arrangeGrob(t_grob)
+
+
+g2<-UPLVI_class_cov$PRIMECLAS%>%
+    ggplot(aes(x = factor(ID), y = t_proportion, fill=PRIMECLAS, label = ID)) +
+    geom_bar(width=.8, stat="identity", colour="black", lwd=.2) +
+    labs(x="pinch-point", y="% cover")+
+    scale_y_continuous(labels=scales::percent,position = "right") +
+    guides(fill=guide_legend(ncol=3))+
+    theme(panel.spacing = unit(1, "lines"),
+          panel.background = element_blank(),
+          axis.title = element_text(colour = "white"),
+          axis.ticks=element_blank(),
+          #plot.margin=margin(0,0,0,50),
+          #legend.key.width=unit(.5,"cm"),
+          legend.position = "left")
+          #legend.position="left")
+
+
+g3<-UPLVI_class_cov$LANDCLAS%>%
+    ggplot(aes(x = factor(ID), y = t_proportion, fill=LANDCLAS, label = ID)) +
+    geom_bar(width=.8, stat="identity", colour="black", lwd=.2) +
+    labs(x="pinch-point", y="% cover")+
+    scale_y_continuous(labels=scales::percent, position = "right") +
+    guides(fill=guide_legend(ncol=3))+
+    theme(panel.spacing = unit(1, "lines"),
+          panel.background = element_blank(),
+          axis.title.x = element_text(colour = "white"),
+          axis.ticks=element_blank(),
+          #plot.margin=margin(0,0,0,50),
+          #legend.key.width=unit(.5,"cm"),
+          legend.position = "left")
+          #legend.position="left")
+
+g4<-UPLVI_class_cov$STYPE%>%
+    ggplot(aes(x = factor(ID), y = t_proportion, fill=STYPE, label = ID)) +
+    geom_bar(width=.8, stat="identity", colour="black", lwd=.2) +
+    labs(x="pinch-point", y="% cover")+
+    scale_y_continuous(labels=scales::percent, position = "right") +
+    #scale_x_discrete(labels= as.character(ID), breaks= ID)+
+    guides(fill=guide_legend(ncol=3))+
+    theme(panel.spacing = unit(1, "lines"),
+          panel.background = element_blank(),
+          axis.title.y = element_text(colour = "white"),
+          axis.ticks=element_blank(),
+          #plot.margin=margin(0,0,0,50),
+          #legend.key.width=unit(.5,"cm"),
+          legend.position = "left")
+          #legend.position="bottom")
+
+
+
+
+ lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(2),
+              c(3),
+              c(4))   
+
+g5<-arrangeGrob(g1, g2, g3, g4, layout_matrix =lay2)
+ggsave("4_output/maps/summary/UPLVI_class_cov_map.png", g5, width=11, height=14)
+```
+
+```{r echo=FALSE, fig.cap= "Canopy poly class map #2.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/summary/UPLVI_class_cov_map.png")
+```
