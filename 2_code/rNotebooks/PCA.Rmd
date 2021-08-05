@@ -1,0 +1,514 @@
+
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 500px;
+}
+```
+
+### Setup {-}
+
+#### intall libraries {-}
+```{r eval=FALSE}
+library(devtools)
+install_github("vqv/ggbiplot")
+library(ggbiplot)
+library(FactoMineR)
+library(dplyr)
+library(factoextra)
+```
+
+
+
+#### load layers {-}
+```{r eval=FALSE}
+load("3_pipeline/store/pp_all_Met_wide.rData")
+```
+
+
+### Run PCA {-}
+
+#### Prep data and run PCA {-}
+
+```{r eval=FALSE}
+x<-pp_all_Met_wide
+x<-x[-c(1)]
+x<-distinct(x)
+
+rownames(x)<-x[,1]
+x<-x[-c(1)]
+
+x$pp_area<-as.numeric(x$pp_area)
+x$pp_area<-as.numeric(x$dist2cent)
+
+x[is.na(x)]<-0
+
+#create grouping variable
+x$area_group <- cut(x$pp_area, 4)
+
+# x.pca<-prcomp(x[,c(8, 11:27)], center = TRUE, scale. = TRUE)
+# summary(x.pca)
+
+x.pca<-princomp(x[,c(12:28)], cor=TRUE)
+summary(x.pca)
+print(x.pca$loadings)
+save(x.pca, file="3_pipeline/tmp/x.pca_out.rData")
+
+x.pca$scores
+
+#save output as a txt file
+sink("4_output/PCA/summary_pca.txt")
+print(summary(x.pca))
+sink()
+
+# x.pca_2<-princomp(x[,c(8:9, 11:57)], cor=TRUE)
+# summary(x.pca_2)
+
+x.pca<-princomp(x[,c(4:5, 8:9, 11:27)], cor=TRUE)
+# summary(x.pca_2)
+```
+
+```{r eval=TRUE, echo=FALSE}
+
+load("3_pipeline/tmp/x.pca_out.rData")
+print(x.pca$loadings)
+print(summary(x.pca))
+
+```
+
+
+##### Visualize eigenvalues (scree plot). {-}
+
+How much variance is explained by each principal componant?
+
+```{r eval=FALSE}
+png("4_output/PCA/scree_plot", width=1000, height=600)
+fviz_eig(x.pca)
+dev.off()
+
+# Contributions of variables to PC1
+png("4_output/PCA/cont_PCA1_plot", width=1000, height=600)
+fviz_contrib(x.pca, choice = "var", axes = 1, top = 10)
+dev.off()
+
+
+# Contributions of variables to PC2
+png("4_output/PCA/cont_PCA2_plot", width=1000, height=600)
+fviz_contrib(x.pca, choice = "var", axes = 2, top = 10)
+dev.off()
+
+```
+
+```{r echo=FALSE, fig.cap= "Scree plot showing how much variance is explained by each PCA", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/scree_plot")
+```
+
+
+```{r echo=FALSE, fig.cap= "Contribution of variables to Dim-1", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/cont_PCA1_plot")
+```
+
+```{r echo=FALSE, fig.cap= "Contribution of variables to Dim-2", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/cont_PCA2_plot")
+```
+
+
+
+
+
+#### Plot results {-}
+
+```{r eval=FALSE}
+
+# create ggplot theme
+custom_theme<-function(){theme(
+        panel.background = element_rect(fill = "white", color="#636363"),
+        # axis.line.y = element_line(colour = "#636363"),
+        axis.text.y = element_text(colour="#636363"),
+        axis.ticks.y = element_line(colour = "#636363"),
+        axis.title.y = element_text(colour="#636363"),
+        axis.text.x = element_text(colour="#636363"),
+        axis.ticks.x = element_line(colour = "#636363"),
+        #axis.line.x = element_line(colour = "#636363"),
+        axis.title.x = element_text(colour="#636363"),
+        legend.title = element_text(colour="#636363"),
+        legend.text = element_text(colour="#636363"),
+        legend.key = element_rect(fill = "white"),
+      panel.grid.major = element_line(size = 0.0, colour="#bdbdbd"),
+      aspect.ratio = 5/5
+        #panel.grid.minor = element_line(size = 0.0)
+        )}
+
+
+# with labels
+ggbiplot(x.pca, circle = TRUE)+
+  custom_theme()
+ggsave(filename="4_output/PCA/pca.png",  width = 13, height = 10)
+
+
+
+#current difference
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$cur_diff_group)+
+  labs(color="current difference")+
+    custom_theme()
+ggsave(filename="4_output/PCA/pca_cur_diff_group.png",  width = 13, height = 10)
+
+
+#mean current
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$cur_in_mean_group)+
+  labs(color="Mean current in pinch-point")+
+    custom_theme()
+ggsave(filename="4_output/PCA/pca_cur_in_mean_group.png", width = 13, height = 10)
+
+
+
+
+#distance 2 city center
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$dist2cent_group)+
+  labs(color="distance to city center")+
+    custom_theme()
+ggsave(filename="4_output/PCA/pca_dist2cent_group.png", width = 13, height = 10)
+
+
+#reach
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$Reach)+
+  labs(color="RoG reach")+
+    custom_theme()
+ggsave(filename="4_output/PCA/pca_Reach_group.png", width = 13, height = 10)
+
+
+
+#polygon area
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$area_group)+
+  labs(color="pinch-point area (m)")+
+    custom_theme()
+ggsave(filename="4_output/PCA/pca_area_group.png", width = 13, height = 10)
+
+
+#polygon area
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$season)+
+  labs(color="season")+
+    custom_theme()
+ggsave(filename="4_output/PCA/pca_season_group.png", width = 13, height = 10)
+
+
+```
+
+
+
+
+```{r echo=FALSE, fig.cap= "PCA results", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca.png")
+```
+
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the within pinch-pont mean current values", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca_cur_in_mean_group.png")
+```
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the difference between within and without current values", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca_cur_diff_group.png")
+```
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the pinch-point polygon area", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca_area_group.png")
+```
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the distance to city center", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca_dist2cent_group.png")
+```
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the RoG reach", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca_Reach_group.png")
+```
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by season", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca_season_group.png")
+```
+
+
+
+
+
+#### hierarchical clustering of PCA {-}
+
+```{r eval=FALSE}
+
+#hc<-hclust(dist(x.pca_2$loadings))
+
+loadings = x.pca$loadings[]
+    
+    q = loadings[,1]
+    y = loadings[,2]
+    z = loadings[,3]    
+
+    
+    hc = hclust(dist(cbind(q,y)), method = 'ward')
+    
+    png("4_output/PCA/hclust_plot", width=1000, height=600)
+    plot(hc, axes=F,xlab='', ylab='',sub ='', main='Clusters')
+    rect.hclust(hc, k=4, border='red')
+    dev.off()
+   
+    
+# view clusters in biplot
+x.pca2<-x.pca    
+  
+# pct=paste0(colnames(x.pca2$x)," (",sprintf("%.1f",x.pca2$sdev/sum(x.pca2$sdev)*100),"%)")
+p2=as.data.frame(x.pca2$x)    
+
+
+x.pca2$k=factor(cutree(hclust(dist(x), method='ward'),k=3))
+ggbiplot(x.pca2,  ellipse=TRUE, groups=x.pca2$k)+
+  labs(color="cluster")+
+    custom_theme()
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Hierarchical clusters of PCA variables", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/hclust_plot")
+```
+
+
+
+#### Sort pinch-points into coresponding clusters {-}
+
+
+
+```{r eval=FALSE}
+# Compute hierarchical clustering on principal components
+
+# Compute PCA with ncp = 3.  The argument ncp = 3 is used in the function PCA() to keep only the first three principal components.
+res.pca <- PCA(x[,c(12:28)], ncp = 2, graph = FALSE)
+
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+save(res.hcpc, file="3_pipeline/store/res_hcpc.rData" )
+
+
+# res.hcpc.var <- HCPC(res.pca$var$coord, graph = TRUE)
+
+
+
+fviz_dend(res.hcpc, 
+          cex = 0.7,                     # Label size
+          palette = "jco",               # Color palette see ?ggpubr::ggpar
+          rect = TRUE, rect_fill = TRUE, # Add rectangle around groups
+          rect_border = "jco",           # Rectangle color
+          labels_track_height = 0.3      # Augment the room for labels
+          )
+
+fviz_cluster(res.hcpc,
+             repel = TRUE,            # Avoid label overlapping
+             show.clust.cent = FALSE,
+             ellipse= FALSE,# Show cluster centers
+             palette = "jco",         # Color palette see ?ggpubr::ggpar
+             ggtheme = theme_minimal(),
+             main = "Factor map"
+             )
+fviz_pca_biplot(res.pca)
+
++
+# 
+#   fviz_cluster(res.hcpc,x.pca,
+#              repel = TRUE,            # Avoid label overlapping
+#              show.clust.cent = TRUE, # Show cluster centers
+#              palette = "jco",         # Color palette see ?ggpubr::ggpar
+#              ggtheme = theme_minimal(),
+#              main = "Factor map"
+#              )
+#     ggbiplot(x.pca, circle = TRUE)
+
+
+
+#Visualize on biplot
+  hcpc_biplot<-ggbiplot(x.pca,  ellipse=TRUE, groups=res.hcpc$data.clust$clust, varname.size = 3)+
+  scale_color_manual(name="Cluster", values=c("#1b9e77", "#d95f02", "#7570b3", "#e7298a"))+
+  coord_cartesian(clip = "off")+  
+  custom_theme()
+
+  ggsave(filename="4_output/PCA/pca_cluster_group.png", width = 13, height = 10)
+
+```
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by hierarchical cluster", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/pca_cluster_group.png")
+```
+
+
+#### Plot clustered points onto a map {-}
+
+
+```{r eval=FALSE}
+#make a data frame with pinch-point id and cluster
+
+pp_clus<-as.data.frame(res.hcpc$data.clust)
+pp_clus <- tibble::rownames_to_column(pp_clus, "group")
+pp_clus<- pp_clus[c(1,19)]
+save(pp_clus, file="3_pipeline/tmp/pp_clus.rData")
+
+
+# load sf object with pinch-point polygons
+load("1_data/manual/pp_all_clus_RoG_wgs.rdata")
+
+pp_all_clus_RoG_wgs_clus<-left_join(pp_all_clus_RoG_wgs, pp_clus)%>%
+  rename(hcpc_clust=clust)
+
+save(pp_all_clus_RoG_wgs_clus, file="1_data/manual/pp_all_clus_RoG_wgs_clus.rdata")
+```
+
+
+##### Entire city {-}
+
+```{r eval=FALSE}
+library(tmap)
+library(tmaptools)
+library(gridExtra)
+
+
+
+# summer only pinch-points
+sum_pp<-pp_all_clus_RoG_wgs_clus %>% filter(season=="summer")
+# load ribbon of green
+RoG_Reaches<-st_read("1_data/external/Ribbon_of_Green_Study_Area_Reaches/Reach_Boundaries/RoG_Reaches_V1_210301/RoG_Reaches_V1_210301.shp")
+# check crs
+st_crs(RoG_Reaches)
+# NAD83_3TM_114_Longitude_Meter_Province_of_Alberta_Canada
+RoG_Reaches<-st_transform(RoG_Reaches, crs = st_crs(3776))
+
+
+# load city boundary
+City_Boundary<-st_read("1_data/external/City_Boundary/City_Boundary.shp")
+
+# reproject to match the CRS of RoG_reaches 
+City_Boundary<-st_transform(City_Boundary, crs = st_crs(3776))
+
+#load road data
+v_road<-st_read("1_data/external/roads_data/V_ROAD_SEGMENT_CUR.shp")
+# reproject to match the CRS of RoG_reaches 
+v_road<-st_transform(v_road, crs = st_crs(3776))
+
+# crop roads file by a bounding box of the north saskatchewan central region polygon
+v_road_1<-st_crop(v_road, City_Boundary)
+
+
+bbox_RoG<-st_bbox(RoG_Reaches)%>%
+  st_as_sfc()
+
+#plot shape file
+
+pal=c("#1b9e77" , "#d95f02", "#7570b3", "#e7298a")
+m<-
+  tm_shape(bbox_RoG)+
+    tm_borders(col="white")+
+  tm_shape(City_Boundary)+tm_borders(col = "#636363")+tm_fill(col="#d9d9d9")+
+  tm_layout(frame=FALSE, legend.text.size=.5, legend.width=2, legend.position=c("left","bottom"),)+
+  tm_legend(outside=TRUE, frame=FALSE)+
+  tm_shape(v_road_1)+tm_lines(col="white", lwd = .8)+
+    tm_shape(City_Boundary)+
+    tm_borders(col="#636363")+
+    tm_fill(col="white", alpha = .5)+
+  tm_shape(RoG_Reaches)+
+   tm_fill(col="#8bd867", alpha = .3)+
+   tm_borders(col = "#636363", lwd = 0)+
+  tm_shape(sum_pp)+
+   tm_fill(col="hcpc_clust", palette=pal, contrast = c(0.26, 1),alpha = 1, title="Pinch-point clusters")+
+   tm_borders(col = "#636363", lwd = 0)+
+  tm_layout(frame=FALSE, legend.show = FALSE)
+m
+
+t_grob<-tmap_grob(m) 
+g1<-arrangeGrob(t_grob) 
+
+lay2 <- cbind(c(1),
+              c(1),
+              c(1),
+              c(2),
+              c(2))   
+
+g3<-arrangeGrob(g1, hcpc_biplot, layout_matrix =lay2)
+
+ggsave("4_output/maps/pp_hclust_map2.png", g3, width=15, height=9)
+
+tmap_save(m, "4_output/maps/pp_hclust_map.png", outer.margins=c(0,0,0,0))
+```
+
+```{r echo=FALSE, fig.cap= "Pich-points sorted by hierarchical cluster", out.width = '100%'}
+knitr::include_graphics("4_output/maps/pp_hclust_map2.png")
+```
+
+
+##### Central reach {-}
+
+```{r eval=FALSE}
+load("1_data/manual/study_area.rdata")
+
+# load clipped road data
+load("1_data/manual/v_road_clip.rdata")
+
+# load polygon representing North Central Region of Saskatchewan region of the ribbon of green
+load("1_data/manual/nscr.rdata") 
+
+
+m1<-
+  tm_shape(v_road_clip)+tm_lines(col="white")+
+  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(nscr)+
+    tm_fill(col="white", alpha=.4)+
+    tm_borders(col = "#636363")+
+ tm_shape(sum_pp)+
+   tm_fill(col="hcpc_clust", palette=pal, contrast = c(0.26, 1),alpha = 1, title="Hierarchical clusters", labels = c("1: LANDCLASS DEV, PRIMECLASS_NVE","2: LANDCLASS_MOD, canopy_grass, LANDCLASS_WET","3: LANDCLASS_NAT, canopy_shrub","4: canopy_tree, LANDCLAS_NAW, LANDCLAS_NNW"))+
+   tm_borders(col = "#636363", lwd = 0)+
+  tm_layout( legend.show = TRUE, legend.bg.color = "white", legend.text.size = .6, legend.frame.lwd = 1, legend.frame = "black")
+m1
+
+tmap_save(m1, "4_output/maps/pp_hclust_map_NSC.png", outer.margins=c(0,0,0,0))  
+
+t_grob<-tmap_grob(m1) 
+g2<-arrangeGrob(t_grob) 
+
+lay2 <- rbind(c(1),
+              c(1),
+              c(1),
+              c(1),
+              c(2),
+              c(2),
+              c(2),
+             c(2),)   
+v
+g4<-arrangeGrob(g3, g2, layout_matrix =lay2)
+
+ggsave("4_output/maps/pp_hclust_map2_NSC.png", g4, width=19, height=17)
+
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Pinch-points sorted by hierarchical cluster in the North Saskatchewan Central reach of the Ribbon of Green.", out.width = '100%'}
+knitr::include_graphics("4_output/maps/pp_hclust_map_NSC.png")
+```
+
+
+
