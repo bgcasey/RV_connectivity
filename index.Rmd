@@ -98,9 +98,23 @@ pre[class] {
 ```
 
 
-# Compare Pinchpoints 
+# Examine Pinchpoints 
 
-## Principal Componants Analysis {-}
+## Principal Componants Analysis (pinch-point buffers) {-}
+
+```{r child = '2_code/rNotebooks/PCA.Rmd'}
+```
+
+
+## Principal Componants Analysis (pinch-point interiors) {-}
+```{r child = '2_code/rNotebooks/PCA_interior_only.Rmd'}
+```
+
+## Simple Linear Regression 
+```{r child = '2_code/rNotebooks/regression.Rmd'}
+
+```
+
 
 # Multivariate maps
 

@@ -1,0 +1,143 @@
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 500px;
+}
+```
+
+### Setup {-}
+
+#### intall libraries {-}
+
+
+#### load layers {-}
+```{r}
+load("3_pipeline/store/pp_all_Met_wide.rData")
+load("3_pipeline/store/pp_all_Met_wide_in.rData")
+
+buf<-pp_all_Met_wide
+
+in_pp<-pp_all_Met_wide_in
+```
+
+
+### Explore relationships {-}
+
+#### Flow and area {-}
+
+```{r}
+m1<-lm(as.numeric(pp_area) ~ cur_in_mean, data = buf)
+
+plot(buf$cur_mean, as.numeric(buf$pp_area), xlab="mean circuitscape current", ylab="pinch-point area")
+abline(m1, col="red")
+
+summary(m1)
+```
+
+
+#### Flow difference and area {-}
+
+```{r}
+m2<-lm(as.numeric(pp_area) ~ cur_diff, data = buf)
+
+plot(buf$cur_diff, as.numeric(buf$pp_area), xlab="Difference between inner and outer current", ylab="pinch-point area")
+abline(m2, col="red")
+
+summary(m2)
+```
+
+
+
+#### Flow and distance to city center {-}
+
+```{r}
+m4<-lm(as.numeric(dist2cent) ~ cur_in_mean, data = buf)
+
+plot(buf$cur_mean, as.numeric(buf$dist2cent),  xlab="mean circuitscape current", ylab="distance to city center (m)")
+abline(m4, col="red")
+
+summary(m4)
+```
+
+
+#### Flow difference and distance to city center {-}
+
+```{r}
+m5<-lm(as.numeric(dist2cent) ~ cur_diff, data = buf)
+
+plot(buf$cur_diff, as.numeric(buf$dist2cent),  xlab="Difference between inner and outer current", ylab="distance to city center (m)")
+abline(m5, col="red")
+
+summary(m5)
+```
+
+
+
+
+
+#### Flow difference and % vegetation cover (buffer) {-}
+
+```{r}
+m3<-lm(PRIMECLASS_VEG~cur_diff, data = buf)
+
+plot(buf$cur_diff, buf$PRIMECLASS_VEG, xlab="Difference between inner and outer current", ylab="Proportion of vegetation cover")
+abline(m3, col="red")
+
+
+summary(m3)
+```
+
+
+#### Flow difference and % vegetation cover (in pinch-point) {-}
+
+```{r}
+m3b<-lm(PRIMECLASS_VEG~cur_diff, data = in_pp)
+
+plot(in_pp$cur_diff, in_pp$PRIMECLASS_VEG, xlab="Difference between inner and outer current", ylab="Proportion of vegetation cover")
+abline(m3b, col="red")
+
+
+summary(m3b)
+```
+
+
+
+
+
+
+#### Flow difference and % developed (buffer) {-}
+
+```{r}
+m6<-lm(LANDCLAS_DEV~cur_diff, data = buf)
+
+plot(buf$cur_diff, buf$LANDCLAS_DEV, xlab="Difference between inner and outer current", ylab="Proportion of developed land")
+abline(m6, col="red")
+
+
+summary(m6)
+```
+
+#### Flow difference and % developed (in pinch-point) {-}
+
+```{r}
+m7<-lm(LANDCLAS_DEV~cur_diff, data = in_pp)
+
+plot(in_pp$cur_diff, in_pp$LANDCLAS_DEV, xlab="Difference between inner and outer current", ylab="Proportion of developed land")
+abline(m7, col="red")
+
+
+summary(m7)
+```
+

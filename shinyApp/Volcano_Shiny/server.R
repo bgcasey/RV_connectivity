@@ -9,7 +9,8 @@ library(dplyr)
 library(stringr)
 library(countrycode)
 library(here)
-
+library(sf)
+library(rgdal)
 
 
 function(input, output, session) {
@@ -18,6 +19,16 @@ function(input, output, session) {
   # this dataset comes from the May 12, 2020 TidyTuesday dataset, "eruptions"
   # here, we upload data from the TidyTuesday repo and slightly manipulate it
   # to give us some variable options to play with. 
+  
+load("RoG_Reaches.rData")
+  
+# RoG_Reaches<- st_c(RoG_Reaches, crs="+proj=longlat +datum=WGS84")
+# 
+# test<-st_transform(RoG_Reaches, crs="+proj=longlat +datum=WGS84")  
+  
+# RoG_Reaches<-test
+# save(RoG_Reaches, file="shinyApp/Volcano_Shiny/RoG_Reaches.rData")
+
   volcano <-
     
     # read data from tidytuesday repo
@@ -143,8 +154,8 @@ function(input, output, session) {
       # add map tiles from CartoDB. 
       addProviderTiles("CartoDB.VoyagerNoLabels") %>%
       # set lat long and zoom to start
-      setView(lng = -113.4938, lat = 53.5461, zoom = 11)
-    
+      setView(lng = -113.4938, lat = 53.5461, zoom = 11)%>%
+      addPolygons(data=RoG_Reaches$)
   })
   
   #  # add proxy for showing volcanoes of a certain type 
@@ -155,34 +166,80 @@ function(input, output, session) {
   # that's not what we want.  We won't go into more details for now, but that's what this code means.  
   # read more about leaflet and Shiny here: https://rstudio.github.io/leaflet/shiny.html
   
-  observe({ # "observe" in shiny speak = "do this whenever reactive elements change"
-    
-    # make a colorpalette function for the 9 volcano types
-    pal <- colorFactor(RColorBrewer::brewer.pal(9,"Set1"), 
-                       domain = NULL)
-    
-    # when something is changed, clear existing points, and add new ones
-    leafletProxy("volcanomap") %>%
-      clearMarkers() %>%       # clear points from last selected options
-      addCircleMarkers(        # add new points from "selected_volcanoes()" reactive object
-        data = selected_volcanoes(),
-        lng = ~longitude,
-        lat = ~latitude,
-        radius = ~6,
-        color = ~pal(volcano_type_consolidated),
-        stroke = FALSE, fillOpacity = 0.9,
-        # create a popup with the volcano name and some info
-        # --- --- --- --- ---  CHALLENGE  --- --- --- --- --- ---
-        # if you want, see if you can add "country" or "last eruption year" to the popup box
-        popup = ~paste("<b>",volcano_name,"</b>",
-                       "<br>",
-                       "<b> Type: </b>",volcano_type_consolidated, "<br>",
-                       "<b> Continent: </b>",continent, "<br>",
-                       "<b> Elevation: </b>", elevation, "m.", "<br>",
-                       "<b> Last Eruption: </b>", last_eruption_year) 
-      ) # end add circle markers
-    
-  }) # end observe
+  
+  # leafletProxy(RoG_Reaches)%>%
+  #   addPolygons(color = "green")
+  
+  
+  # observe({ # "observe" in shiny speak = "do this whenever reactive elements change"
+  #   
+  #   # make a colorpalette function for the 9 volcano types
+  #   pal <- colorFactor(RColorBrewer::brewer.pal(9,"Set1"), 
+  #                      domain = NULL)
+  #   
+  #   # when something is changed, clear existing points, and add new ones
+  #   leafletProxy("RoG_Reaches") %>%
+  #     clearMarkers() %>%       # clear points from last selected options
+  #     addCircleMarkers(        # add new points from "selected_volcanoes()" reactive object
+  #       data = selected_volcanoes(),
+  #       lng = ~longitude,
+  #       lat = ~latitude,
+  #       radius = ~6,
+  #       color = ~pal(volcano_type_consolidated),
+  #       stroke = FALSE, fillOpacity = 0.9,
+  #       # create a popup with the volcano name and some info
+  #       # --- --- --- --- ---  CHALLENGE  --- --- --- --- --- ---
+  #       # if you want, see if you can add "country" or "last eruption year" to the popup box
+  #       popup = ~paste("<b>",volcano_name,"</b>",
+  #                      "<br>",
+  #                      "<b> Type: </b>",volcano_type_consolidated, "<br>",
+  #                      "<b> Continent: </b>",continent, "<br>",
+  #                      "<b> Elevation: </b>", elevation, "m.", "<br>",
+  #                      "<b> Last Eruption: </b>", last_eruption_year) 
+  #     ) # end add circle markers
+  #   
+  # }) # end observe
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  # observe({ # "observe" in shiny speak = "do this whenever reactive elements change"
+  #   
+  #   # make a colorpalette function for the 9 volcano types
+  #   pal <- colorFactor(RColorBrewer::brewer.pal(9,"Set1"), 
+  #                      domain = NULL)
+  #   
+  #   # when something is changed, clear existing points, and add new ones
+  #   leafletProxy("volcanomap") %>%
+  #     clearMarkers() %>%       # clear points from last selected options
+  #     addCircleMarkers(        # add new points from "selected_volcanoes()" reactive object
+  #       data = selected_volcanoes(),
+  #       lng = ~longitude,
+  #       lat = ~latitude,
+  #       radius = ~6,
+  #       color = ~pal(volcano_type_consolidated),
+  #       stroke = FALSE, fillOpacity = 0.9,
+  #       # create a popup with the volcano name and some info
+  #       # --- --- --- --- ---  CHALLENGE  --- --- --- --- --- ---
+  #       # if you want, see if you can add "country" or "last eruption year" to the popup box
+  #       popup = ~paste("<b>",volcano_name,"</b>",
+  #                      "<br>",
+  #                      "<b> Type: </b>",volcano_type_consolidated, "<br>",
+  #                      "<b> Continent: </b>",continent, "<br>",
+  #                      "<b> Elevation: </b>", elevation, "m.", "<br>",
+  #                      "<b> Last Eruption: </b>", last_eruption_year) 
+  #     ) # end add circle markers
+  #   
+  # }) # end observe
   
   
 } # end the server page

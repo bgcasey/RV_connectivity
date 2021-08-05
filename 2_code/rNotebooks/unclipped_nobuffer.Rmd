@@ -1,0 +1,602 @@
+
+
+
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+}
+```
+
+## Setup
+
+### Libraries
+
+```{r}
+library(rgdal)
+library(dplyr)
+library(tidyr)
+library(sf)
+library(tidyverse)
+library(raster)
+```
+
+
+### Load unclipped data
+
+```{r eval=FALSE, echo=FALSE}
+# unclipped data
+
+####### pinch-points
+#load("1_data/manual/pp_all_RoG.rdata")
+#pp_all_clus_RoG$group<- paste(pp_all_clus_RoG$ID, pp_all_clus_RoG$Reach, sep = "_")
+  
+####### covariates
+
+#UPLVI
+UPLVI<-st_read("1_data/external/2018_uPLVI/COE_2018_uPLVI_RES_UPDATE_DRAFTv3.shp")
+
+#picnic
+picnic<-st_read("1_data/external/Parks_Infrastructure/Copy_of_PICNIC_SITES.shp")
+st_crs(picnic)
+picnic<-st_transform(picnic, crs = st_crs(3776))
+
+#playground
+playgrounds<-st_read("1_data/external/Parks_Infrastructure/Copy_of_Playgrounds.shp")
+st_crs(playgrounds)
+playgrounds<-st_transform(playgrounds, crs = st_crs(3776))
+
+#sports fields
+sports_fields<-st_read("1_data/external/Parks_Infrastructure/Copy_of_SPORTS_FIELDS.shp")
+st_crs(sports_fields)
+sports_fields<-st_transform(sports_fields, crs = st_crs(3776))
+
+# there are some invalid geometries in this spatial layer.
+# identify invalid geometries:
+valid<-st_is_valid(sports_fields)
+
+#fix by by buffering geometries:
+sports_fields<-st_buffer(sports_fields[!is.na(valid),], 0.0)
+
+
+
+
+#slope
+slope<-raster("1_data/external/Edmonton_slope_aspect_in_degrees/slope")
+slope<-projectRaster(slope, crs=crs(picnic))
+
+
+
+#circuitscape raster
+cur_map_sum<-raster("1_data/external/Circuitscape/Map/Coyote_Summer_All_curmap.tif")
+cur_map_sum<-projectRaster(cur_map_sum, crs=crs(picnic))
+
+cur_map_win<-raster("1_data/external/Circuitscape/Map/Coyote_Winter_All_curmap.tif")
+cur_map_win<-projectRaster(cur_map_win, crs=crs(picnic))
+
+# #Canopy polygons
+# can_path<-"1_data/external/Canopy_Cover_2020/PolygonData.gdb"
+# # # List all feature classes in a file geodatabase
+# # subset(ogrDrivers(), grepl("GDB", name))
+# # fc_list <- ogrListLayers(can_path)
+# # print(fc_list)
+# can_poly <- readOGR(dsn=can_path,layer="All_Polygons")
+
+
+
+# load ribbon of green
+RoG_Reaches<-st_read("1_data/external/Ribbon_of_Green_Study_Area_Reaches/Reach_Boundaries/RoG_Reaches_V1_210301/RoG_Reaches_V1_210301.shp")
+
+
+# check crs
+st_crs(RoG_Reaches)
+# NAD83_3TM_114_Longitude_Meter_Province_of_Alberta_Canada
+RoG_Reaches<-st_transform(RoG_Reaches, crs = st_crs(3776))
+
+```
+
+load pp clusters
+
+```{r}
+load("1_data/manual/pp_all_RoG.rdata")
+```
+
+
+## Metrics in pinch_point
+
+### Calculate proportion of cover
+
+#### Intersect polygon layers with pinch points
+
+```{r}
+# list objects to individually intersect by the pinchpoints
+#x<-list(UPLVI, can_poly, picnic, playgrounds, sports_fields)
+x<-list(UPLVI, picnic, playgrounds, sports_fields)
+# names(x)<-c("UPLVI_int", "can_poly_int", "picnic_int", "playgrounds_int", "sports_fields_int")
+names(x)<-c("UPLVI_int", "picnic_int", "playgrounds_int", "sports_fields_int")
+
+
+# calculate the area of the buffered pinchpoints
+pp_all_clus_RoG$in_area<-st_area(pp_all_clus_RoG)
+
+
+#apply the following to all the layers
+nx<-lapply(x, function(x) 
+  {
+  a<-st_intersection(x, pp_all_clus_RoG) 
+  cbind(a, "int_area"=st_area(a)) #calculate area of new clipped polygons
+  })
+
+#save new intersection objects
+lapply(names(nx),function(x)
+  { assign(x,nx[[x]])
+  save(list=x, file=paste("3_pipeline/tmp/", x, "_in.rdata", sep = ""))
+  })
+
+# put intersection objects into the global environment
+list2env(nx, .GlobalEnv)
+```
+
+#### Proportion  of cover
+
+##### From UPLVI {-}
+
+```{r eval=FALSE}
+load("3_pipeline/tmp/UPLVI_int_in.rData")
+UPLVI_int$group<- paste(UPLVI_int$ID, UPLVI_int$Reach, sep = "_")
+
+
+#UPLVI_int$ID <- paste(UPLVI_int$ID, UPLVI_int$Reach, sep = "_")
+
+
+#UPLVI_int$group<- paste(UPLVI_int$ID, UPLVI_int$Reach, sep = "_")
+
+# create a new dataframe with only necessary columns
+
+TYPE<-as.data.frame(UPLVI_int[c(1,61:62, 4:7, 23:26, 42:45, 63:67)])
+
+#seperate STYPPE ranks into seperate dataframes
+a<-TYPE[c(1:3, 4:7, 16:20)]
+b<-TYPE[c(1:3, 8:11, 16:20)]
+c<-TYPE[c(1:3, 12:15, 16:20)]
+
+# rename columns so they are constant
+b<-setNames(b, names(a))
+c<-setNames(c, names(a))
+
+#rbind dataframes together
+abc<-rbind(a, b, c)
+
+# create a column with just rank number of STYPES
+s_rank<-gather(TYPE, "STYPE_rank", "STYPE", c(4,8,12))
+
+# add the rank column
+abcf<-cbind(abc, s_rank$STYPE_rank)
+
+#reorder columns
+#abcf<-abcf[c(1:3, 8, 4:7)]
+
+# rename columns
+colnames(abcf)[c(4:7, 13)]<-c("PRIMECLAS", "LANDCLAS", "STYPE", "STYPEPER", "s_rank")
+
+# approximate area of each STYPE class/ polygon by multipltying the percentage by polygon area. Creates a new column
+# calculate proportion of each polygon covered by STYPE class
+
+# here is a way to loop through a bunch of column
+v<- abcf[4:6] #select the columns that you want to use for landcover data
+vnames <- colnames(v)
+a <- list()
+j = 1
+for (i in v) {
+  a[[j]] <- abcf %>%
+    group_by(POLY_NUM, group,{{i}})%>%
+    mutate(pp_area=mean(area))%>%
+    mutate(s_area=as.numeric((STYPEPER*.1)*int_area))%>%
+    group_by(group, {{i}})%>%
+    mutate(t_area=sum(s_area))%>%
+    dplyr::select(-s_rank, -STYPEPER, -s_area, -int_area, -POLY_NUM,  -LANDCLAS,-STYPE, -PRIMECLAS)%>%
+    distinct()%>%
+    drop_na('<chr>')%>%
+    mutate(proportion=as.numeric(t_area/in_area))%>%
+    replace_na(list(proportion=0))  %>%
+    mutate(metric=vnames[j])%>%
+    rename(c("class"="<chr>"))%>%
+  dplyr::select(ID, group, season, Reach, in_area, metric, class, proportion)%>%
+  arrange(ID, group, season, Reach, in_area, metric, class, proportion)
+  names(a)[j]=vnames[j] #name list item
+  colnames(a[[j]])[7]<- "class" # name variable column
+  a[[j]]$vnames = vnames[j]
+  j = j + 1
+}
+a
+
+# test<-a$PRIMECLAS
+# nrow(distinct(as.data.frame(test$group)))
+
+
+UPLVI_class_cov_all_in<-a
+
+save(UPLVI_class_cov_all_in, file="3_pipeline/store/UPLVI_class_cov_all_in.rData")
+
+
+```
+
+##### From Canopy polygons {-}
+
+```{r}
+can_poly_int<-st_read("3_pipeline/tmp/pp_all_clus_RoG_canopy_1.shp")
+#test<-distinct(can_poly_int)
+
+# convert geometry to polygons so can_poly_int plots properly
+#can_poly_int<-st_collection_extract(can_poly_int, "POLYGON")
+
+can_poly_int$group<- paste(can_poly_int$ID, can_poly_int$Reach, sep = "_")
+can_poly_int$int_area<-st_area(can_poly_int)
+
+x<-can_poly_int
+
+
+df<-as.data.frame(pp_all_clus_RoG$group)
+df<-rename(df, "group"="pp_all_clus_RoG$group")
+x<-full_join(x, df, by="group")
+#nrow(distinct(as.data.frame(x$group)))
+
+
+xSum<-as.data.frame(x) %>%
+  group_by(ID, group, season, Reach, Class)%>%
+  summarize(pp_area=mean(area), int_mean=mean(int_area))%>%                                                                 mutate(proportion=as.numeric(int_mean/sum(int_mean)))%>%
+  replace_na(list(proportion=0))  %>%        
+  mutate(metric="Vegetation_type")  %>%    
+  select(ID, group, season, Reach, pp_area, metric, Class, proportion)%>%
+  arrange(ID, group, season, Reach, pp_area, metric, Class, proportion)%>%
+  rename("class"="Class") 
+  
+
+can_poly_cov_all<-xSum
+
+save(can_poly_cov_all, file="3_pipeline/store/can_poly_cov_all_in.rData")
+```
+
+
+#### Proportion of pinch point within set distance to a road
+
+
+#### Total length of road in pinch-point buffer
+
+```{r}
+########## just in pp############
+road_ws<-st_read("1_data/external/roads_data/Road_Width_and_Speed/Road_Width_and_Speed.shp")
+st_crs(road_ws)
+road_ws<-st_transform(road_ws, crs = st_crs(3776))
+
+
+tot_road_in<-pp_all_clus_RoG
+
+int_buf = st_intersection(road_ws, tot_road_in)
+
+# plot(polys_buf$geom)
+# plot(int_buf$geom, lwd = 2, add = TRUE)
+
+#Get the total length of road within each polygon. (polygons with no lines are missing from list)
+road_tot<-tapply(st_length(int_buf), int_buf$ID.1,sum)
+
+road_tot<-as.data.frame(road_tot)
+road_tot<-road_tot%>%
+  rownames_to_column()%>%
+  rename("ID"="rowname")
+
+tot_road_in<-left_join(tot_road_in, road_tot)
+
+
+#plot(polys_buf[,"road_tot_buf"])
+save(tot_road_in, file = "3_pipeline/tmp/tot_road_in.rData")
+```
+
+
+
+
+
+#### Proportion of pinch point within set distance to a trail
+
+```{r}
+trails<-st_read("1_data/external/Trails/Copy_of_TRAILS.shp")
+st_crs(trails)
+trails<-st_transform(trails, crs = st_crs(3776))
+
+```
+
+#### Total length of trail in pinch-points buf
+
+```{r}
+########## just in buffer ############
+tot_trail_in_buf<-pp_all_clus_RoG
+
+int_buf = st_intersection(trails, tot_trail_in_buf)
+
+# plot(polys_buf$geom)
+# plot(int_buf$geom, lwd = 2, add = TRUE)
+
+#Get the total length of road within each polygon. (polygons with no lines are missing from list)
+trail_tot<-tapply(st_length(int_buf), int_buf$ID.1,sum)
+
+trail_tot<-as.data.frame(trail_tot)
+trail_tot<-trail_tot%>%
+  rownames_to_column()%>%
+  rename("ID"="rowname")
+
+tot_trail_in<-left_join(tot_trail_in_buf, trail_tot)
+
+# tot_trail_in_buf$trail_tot_buf = rep(0,nrow(polys_buf))
+# tot_trail_in_buf$trail_tot_buf[match(names(trail_tot_buf),polys_buf$ID)] = trail_tot_buf
+
+#plot(polys_buf[,"road_tot_buf"])
+save(tot_trail_in, file = "3_pipeline/tmp/tot_trail_in.rData")
+```
+
+
+
+
+
+
+
+### Raster extract
+
+#### Slope
+
+```{r eval=FALSE}
+load("3_pipeline/store/pp_all_clus_RoG.rData")
+
+pp_slope_mean<-raster::extract(slope,  pp_all_clus_RoG, fun=mean, na.rm=TRUE)
+
+colnames(pp_slope_mean)<-"slope_mean"
+
+```
+
+
+
+
+#### Merge raster data into single data frame
+```{r}
+load("3_pipeline/tmp/pp_ext_r.rData")
+pp_cur<-pp_ext_r[-c(9)]
+
+pp_ext_r_in<-cbind(pp_cur, pp_slope_mean)
+
+save(pp_ext_r_in, file="3_pipeline/tmp/pp_ext_r_in.rData")
+```
+
+
+
+### Combine metrics into a single data frame
+
+### Load data
+```{r}
+load("1_data/manual/pp_all_RoG.rdata")
+pp_all_clus_RoG$group<- paste(pp_all_clus_RoG$ID, pp_all_clus_RoG$Reach, sep = "_")
+load("3_pipeline/tmp/pp_ext_r_cent.rData")
+pp_cent<-pp_ext_r_cent[-c(11)]
+load("3_pipeline/tmp/pp_ext_r_in.rData")
+pp_ext_r_cent_in<-left_join(as.data.frame(pp_ext_r_in), pp_cent)
+
+
+
+load("3_pipeline/store/prop_Trail_all.rData")
+
+
+
+load("3_pipeline/store/prop_Road_all.rData")
+#load("3_pipeline/store/can_poly_cov_all.rData")
+load("3_pipeline/store/UPLVI_class_cov_all_in.rData")
+load("3_pipeline/tmp/tot_trail_in.rData")
+tot_trail_in$group<- paste(tot_trail_in$ID, tot_trail_in$Reach, sep = "_")
+
+load("3_pipeline/tmp/tot_road_in.rData")
+tot_road_in$group<- paste(tot_road_in$ID, tot_road_in$Reach, sep = "_")
+
+load("3_pipeline/tmp/pp_ext_r_in.rData")
+
+
+load("1_data/manual/pp_all_RoG.rdata")
+```
+
+
+
+#### Reformat and join {-}
+
+##### wide format (for PCA)
+```{r}
+library(units)
+pp_ext_r_cent_in<- pp_ext_r_cent_in%>% 
+  rename("pp_area"="area")
+
+pp_ext_r_cent_in<-as.data.frame(pp_ext_r_cent_in)
+pp_ext_r_cent_in<-pp_ext_r_cent_in[-c(10)]
+
+# #make can_poly wide format
+# can_poly_2<-can_poly_cov_all%>%
+#     spread(key=class, value=proportion)%>%
+#     rename("canopy_shrub_dec_in"="Shrub-Dec", "canopy_tree_con_in"="Tree-Con", "canopy_tree_dec_in"="Tree-Dec", "canopy_grass_in"="Grass", "canopy_shrub_con_in"="Shrub-Con")%>%
+#     select(-c(12))
+
+
+#make UPLVI wide format
+UPLVI_PRIMECLAS<-spread(UPLVI_class_cov_all_in$PRIMECLAS, class, proportion)%>%
+  dplyr::select(-c(6))
+  colnames(UPLVI_PRIMECLAS)[7:8] <- paste("PRIMECLASS_", colnames(UPLVI_PRIMECLAS[,c(7:8)]), sep = "")
+UPLVI_LANDCLAS<-spread(UPLVI_class_cov_all_in$LANDCLAS, class, proportion)%>%
+  dplyr::select(-c(6))
+  colnames(UPLVI_LANDCLAS)[7:12] <- paste("LANDCLAS_", colnames(UPLVI_LANDCLAS[,c(7:12)]), sep = "")
+UPLVI_STYPE<-spread(UPLVI_class_cov_all_in$STYPE, class, proportion)%>%
+  dplyr::select(-c(6))
+  colnames(UPLVI_STYPE)[7:34] <- paste("STYPE_", colnames(UPLVI_STYPE[,c(7:34)]), sep = "")
+
+
+pp_all_Met_wide_in<-pp_ext_r_cent_in%>%
+  left_join(prop_Trail_all[c(2, 8)])%>%
+  rename("trail_proportion"="proportion")%>%
+  left_join(as.data.frame(tot_trail_in[c(2,6)]))%>%
+  dplyr::select(-(16))%>%
+  left_join(prop_Road_all[c(2,8)])%>%
+  rename("road_proportion" ="proportion")%>%
+  left_join(as.data.frame(tot_road_in[c(2,7)]))%>%
+  dplyr::select(-(18))%>%
+  #left_join(can_poly_2[c(2, 7:11 )])%>%
+  left_join(UPLVI_PRIMECLAS[c(2, 7:8)])%>%
+  left_join(UPLVI_LANDCLAS[c(2, 7:12)])%>%
+  left_join(UPLVI_STYPE[c(2, 7:34)])
+
+#replace NA's with 0
+
+
+
+save(pp_all_Met_wide_in , file="3_pipeline/store/pp_all_Met_wide_in.rData")
+
+```
+
+
+
+#### long format (for shiny) {-}
+```{r}
+load("3_pipeline/store/prop_Road_all.rData")
+load("3_pipeline/store/prop_Trail_all.rData")
+load("3_pipeline/store/UPLVI_class_cov_all.rData")
+load("3_pipeline/store/can_poly_cov_all.rData")
+
+library(units)
+can_poly_cov_all$pp_area<-as_units(can_poly_cov_all$pp_area, "m2")
+
+#add metrics to comnmon list
+pp_ext_metrics_all<-c(list(prop_Road_all, prop_Trail_all, can_poly_cov_all), UPLVI_class_cov_all)
+names(pp_ext_metrics_all) <- c("road_prop", "trail_prop", "canopy_class", "PRIMECLAS", "LANDCLAS", "STYPE")
+
+save(pp_ext_metrics_all, file="3_pipeline/store/pp_ext_metrics_all.rData")
+
+#make a data.frame
+pp_ext_metrics_all_df<-rbind(prop_Road_all, prop_Trail_all, can_poly_cov_all, UPLVI_class_cov_all$PRIMECLAS, UPLVI_class_cov_all$LANDCLAS, UPLVI_class_cov_all$STYPE)
+
+#add cluster # column
+pp_ext_metrics_all_df<-left_join(pp_ext_metrics_all_df, pp_all_clus_RoG_wgs[c(2,6)])
+pp_ext_metrics_all_df<-pp_ext_metrics_all_df[-c(10)]
+
+save(pp_ext_metrics_all_df , file="3_pipeline/store/pp_ext_metrics_all_df.rData")
+
+```
+
+
+## Format sf object for plotting
+
+```{r}
+load("1_data/manual/pp_all_RoG.rdata")
+pp_all_clus_RoG$cluster<-pp_all_clus_RoG$group
+pp_all_clus_RoG$group<- paste(pp_all_clus_RoG$ID, pp_all_clus_RoG$Reach, sep = "_")
+
+#convert to wgs so it works in leaflet
+pp_all_clus_RoG_wgs<-st_transform(pp_all_clus_RoG, crs ="+proj=longlat +datum=WGS84")
+
+#caclulate centroid and add the xy cooridinates. This will help plot labels in leaflet
+centers <- data.frame(gCentroid(as(pp_all_clus_RoG_wgs, "Spatial"),  byid = TRUE))
+pp_all_clus_RoG_wgs<-cbind(pp_all_clus_RoG_wgs, centers)
+
+save(pp_all_clus_RoG_wgs, file="1_data/manual/pp_all_clus_RoG_wgs.rdata")
+
+#do the same for RoG layer
+RoG_Reaches<-st_read("1_data/external/Ribbon_of_Green_Study_Area_Reaches/Reach_Boundaries/RoG_Reaches_V1_210301/RoG_Reaches_V1_210301.shp")
+RoG_Reaches_wgs<-st_transform(RoG_Reaches, crs ="+proj=longlat +datum=WGS84")
+centers <- data.frame(gCentroid(as(RoG_Reaches_wgs, "Spatial"),  byid = TRUE))
+RoG_Reaches_wgs<-cbind(RoG_Reaches_wgs, centers)
+
+save(RoG_Reaches_wgs, file="1_data/manual/RoG_Reaches_wgs.rdata")
+```
+
+
+
+
+
+
+
+
+
+
+```{r eval=FALSE}
+can_poly_cov_all_2<-
+    can_poly_cov_all%>% 
+    dplyr::select(-c(3)) %>% 
+    spread(key=Class, value=proportion)%>%
+    rename("Shrub_Con"="Shrub-Con", "Shrub_Dec"="Shrub-Dec", "Tree_Con"="Tree-Con", "Tree_Dec"="Tree-Dec", "ID"="group")
+
+UPLVI_PRIMECLAS<-spread(UPLVI_class_cov_all$PRIMECLAS[-c(3:5, 7)], PRIMECLAS, t_proportion)
+UPLVI_LANDCLAS<-spread(UPLVI_class_cov_all$LANDCLAS[-c(3:5, 7)], LANDCLAS, t_proportion)
+UPLVI_STYPE<-spread(UPLVI_class_cov_all$STYPE[-c(3:5, 7)], STYPE, t_proportion)
+
+
+prop_Road_all<-prop_Road_all %>% 
+  rename("r_proportion"="proportion") %>% 
+  dplyr::select(-c("pp_area"))
+
+
+prop_Trail_all<- prop_Trail_all %>% 
+  rename("t_proportion"="proportion") %>% 
+  dplyr::select(-c("pp_area"))
+
+prop_Road_all<-prop_Road_all%>%
+  rename("ID"="group")
+
+prop_Trail_all<-prop_Trail_all%>%
+  rename("ID"="group")
+
+# trail_tot<-as.data.frame(trail_tot)%>%
+#   rename("ID"="group")%>%
+#   dplyr::select(-c(5:7))
+# 
+# road_tot<-as.data.frame(road_tot)%>%
+#   rename("ID"="group")%>%
+#   dplyr::select(-c(5:7))
+
+pp_metrics<-pp_all_clus_RoG%>%
+  left_join(can_poly_cov_all_2, by=c("group"="ID"))%>%
+  left_join(UPLVI_PRIMECLAS, by="group")%>%
+  left_join(UPLVI_LANDCLAS, by="group")%>%
+  left_join(UPLVI_STYPE, by="group")%>%
+  left_join(prop_Road_all, by=c("group"="ID"))%>%
+  #left_join(road_tot)%>%
+  left_join(prop_Trail_all, by=c("group"="ID"))
+  #left_join(trail_tot)
+
+#remove unneeded columns
+pp_metrics<-pp_metrics[-c(11,14,21)]
+pp_metrics<-rename(pp_metrics, "ID"="ID.x")
+pp_all_metrics<-pp_metrics
+
+save(pp_all_metrics, file="1_data/manual/pp_all_metrics.rData")
+
+# change crs to wgs for shiny app
+pp_all_metrics_wgs<-st_transform(pp_all_metrics, crs ="+proj=longlat +datum=WGS84")
+save(pp_all_metrics_wgs, file="1_data/manual/pp_all_metrics_wgs.rdata")
+
+
+# filter out polygons based on minimum area
+## set min area (m^2)
+m<-5000
+
+library(units) #use this package to convert the threshold value to a units object
+m=set_units(m, m^2)
+f<-pp_all_metrics_wgs$area>m
+pp_all_metrics_wgs_fil=pp_all_metrics_wgs[f,]
+
+save(pp_all_metrics_wgs_fil, file="3_pipeline/store/pp_all_metrics_wgs_fil.rData")
+
+```
+
+

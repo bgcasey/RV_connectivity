@@ -21,6 +21,7 @@ Load packages
 
 ```{r}
 library(tidyr)
+library(dplyr)
 ```
 
 
@@ -50,6 +51,11 @@ load("3_pipeline/store/prop_trail.rData")
 load("3_pipeline/store/pp_r.rData")
 
 load("3_pipeline/tmp/pp_s_clip_clus.rData")
+
+
+load("1_data/manual/pp_s_clip.rData")
+
+
 ```
 
 ### Reformat data frames {-}
@@ -95,7 +101,27 @@ pp_metrics<-can_poly_cov2%>%
   left_join(prop_trail)%>%
   left_join(trail_tot)
 
-save(pp_metrics, file="")
+save(pp_metrics, file="1_data/manual/pp_metrics.rData")
 
+pp_all_clus_metrics<-left_join(pp_all_clus, pp_metrics)
+
+
+# change crs to wgs for shiny app
+pp_all_clus_metrics_wgs<-st_transform(pp_all_clus_metrics, crs ="+proj=longlat +datum=WGS84")
+save(pp_all_clus_metrics_wgs, file="1_data/manual/pp_all_clus_metrics_wgs.rdata")
+
+
+
+
+# filter out polygons based on minimum area
+## set min area (m^2)
+m<-5000
+
+library(units) #use this package to convert the threshold value to a units object
+m=set_units(m, m^2)
+f<-pp_all_clus$area>m
+pp_all_clus_minArea=pp_all_clus[f,]
+
+save(pp_all_clus_minArea, file="3_pipeline/store/pp_all_clus_minArea.rData")
 ```
 

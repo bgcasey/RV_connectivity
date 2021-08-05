@@ -1,0 +1,323 @@
+
+```{r setup, include=FALSE, cache=FALSE}
+#Set root directory to R project root
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{css, echo=FALSE}
+# set max height of code chunks using the following css styling
+
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 500px;
+}
+```
+
+### Setup {-}
+
+#### intall libraries {-}
+```{r eval=FALSE}
+library(devtools)
+install_github("vqv/ggbiplot")
+library(ggbiplot)
+library(FactoMineR)
+library(dplyr)
+library(factoextra)
+```
+
+
+
+#### load layers {-}
+```{r eval=FALSE}
+load("3_pipeline/store/pp_all_Met_wide_in.rData")
+```
+
+
+### Run PCA {-}
+
+#### Prep data and run PCA {-}
+
+```{r eval=FALSE}
+x<-pp_all_Met_wide_in
+x<-x[-c(1,3)]
+x<-distinct(x)
+
+rownames(x)<-x[,1]
+x<-x[-c(1)]
+
+x$pp_area<-as.numeric(x$pp_area)
+x$pp_area<-as.numeric(x$dist2cent)
+
+x[is.na(x)]<-0
+
+#create grouping variable
+x$area_group <- cut(x$pp_area, 4)
+
+# x.pca<-prcomp(x[,c(8, 11:27)], center = TRUE, scale. = TRUE)
+# summary(x.pca)
+
+x.pca<-princomp(x[,c(11:22)], cor=TRUE)
+summary(x.pca)
+#print(x.pca$loadings)
+save(x.pca, file="3_pipeline/tmp/x.pca_in.rData")
+
+x.pca$scores
+
+#save output as a txt file
+sink("4_output/PCA/interior_only/summary_pca.txt")
+print(summary(x.pca))
+sink()
+
+```
+
+```{r eval=TRUE, echo=FALSE}
+
+load("3_pipeline/tmp/x.pca_in.rData")
+print(x.pca$loadings)
+print(summary(x.pca))
+
+```
+
+
+##### Visualize eigenvalues (scree plot). {-}
+
+How much variance is explained by each principal componant?
+
+```{r eval=FALSE}
+png("4_output/PCA/interior_only/scree_plot", width=1000, height=600)
+fviz_eig(x.pca)
+dev.off()
+
+# Contributions of variables to PC1
+png("4_output/PCA/interior_only/cont_PCA1_plot", width=1000, height=600)
+fviz_contrib(x.pca, choice = "var", axes = 1, top = 10)
+dev.off()
+
+
+# Contributions of variables to PC2
+png("4_output/PCA/interior_only/cont_PCA2_plot", width=1000, height=600)
+fviz_contrib(x.pca, choice = "var", axes = 2, top = 10)
+dev.off()
+
+```
+
+```{r echo=FALSE, fig.cap= "Scree plot showing how much variance is explained by each PCA", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/scree_plot")
+```
+
+
+```{r echo=FALSE, fig.cap= "Contribution of variables to Dim-1", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/cont_PCA1_plot")
+```
+
+```{r echo=FALSE, fig.cap= "Contribution of variables to Dim-2", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/cont_PCA2_plot")
+```
+
+
+
+
+
+#### Plot results {-}
+
+```{r eval=FALSE}
+
+# create ggplot theme
+custom_theme<-function(){theme(
+        panel.background = element_rect( fill = "white", color="#636363"),
+        # axis.line.y = element_line(colour = "#636363"),
+        axis.text.y = element_text(colour="#636363"),
+        axis.ticks.y = element_line(colour = "#636363"),
+        axis.title.y = element_text(colour="#636363"),
+        axis.text.x = element_text(colour="#636363"),
+        axis.ticks.x = element_line(colour = "#636363"),
+        #axis.line.x = element_line(colour = "#636363"),
+        axis.title.x = element_text(colour="#636363"),
+        legend.title = element_text(colour="#636363"),
+        legend.text = element_text(colour="#636363"),
+        legend.key = element_rect(fill = "white"),
+      panel.grid.major = element_line(size = 0.0, colour="#bdbdbd"),
+      aspect.ratio = 5/5
+        #panel.grid.minor = element_line(size = 0.0)
+        )}
+
+
+# with labels
+ggbiplot(x.pca, circle = TRUE)+
+  coord_cartesian(clip = "off")+
+  custom_theme()
+ggsave(filename="4_output/PCA/interior_only/pca.png",  width = 13, height = 10)
+
+
+
+#current difference
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$cur_diff_group)+
+  labs(color="current difference")+
+  coord_cartesian(clip = "off")+
+    custom_theme()
+ggsave(filename="4_output/PCA/interior_only/pca_cur_diff_group.png",  width = 13, height = 10)
+
+
+#mean current
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$cur_in_mean_group)+
+  labs(color="Mean current in pinch-point")+
+  coord_cartesian(clip = "off")+
+    custom_theme()
+ggsave(filename="4_output/PCA/interior_only/pca_cur_in_mean_group.png", width = 13, height = 10)
+
+
+
+
+#distance 2 city center
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$dist2cent_group)+
+  labs(color="distance to city center")+
+  coord_cartesian(clip = "off")+
+    custom_theme()
+ggsave(filename="4_output/PCA/interior_only/pca_dist2cent_group.png", width = 13, height = 10)
+
+
+#reach
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$Reach)+
+  labs(color="RoG reach")+
+  coord_cartesian(clip = "off")+
+    custom_theme()
+ggsave(filename="4_output/PCA/interior_only/pca_Reach_group.png", width = 13, height = 10)
+
+
+
+#polygon area
+ggbiplot(x.pca,  ellipse=TRUE, groups=x$area_group)+
+  labs(color="pinch-point area (m)")+
+  coord_cartesian(clip = "off")+
+    custom_theme()
+ggsave(filename="4_output/PCA/interior_only/pca_area_group.png", width = 13, height = 10)
+
+```
+
+
+
+
+```{r echo=FALSE, fig.cap= "PCA results", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/pca.png")
+```
+
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the within pinch-pont mean current values", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/pca_cur_in_mean_group.png")
+```
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the difference between within and without current values", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/pca_cur_diff_group.png")
+```
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the pinch-point polygon area", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/pca_area_group.png")
+```
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the distance to city center", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/pca_dist2cent_group.png")
+```
+
+
+
+```{r echo=FALSE, fig.cap= "PCA biplot with pinch-points grouped by the RoG reach", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/pca_Reach_group.png")
+```
+
+
+
+#### hierarchical clustering of PCA {-}
+
+```{r eval=FALSE}
+
+#hc<-hclust(dist(x.pca_2$loadings))
+
+loadings = x.pca$loadings[]
+    
+    q = loadings[,1]
+    y = loadings[,2]
+    z = loadings[,3]    
+
+    
+    hc = hclust(dist(cbind(q,y)), method = 'ward')
+    
+    png("4_output/PCA/interior_only/hclust_plot", width=1000, height=600)
+    plot(hc, axes=F,xlab='', ylab='',sub ='', main='Clusters')
+    rect.hclust(hc, k=3, border='red')
+    dev.off()
+   
+    
+# view clusters in biplot
+x.pca2<-x.pca    
+  
+# pct=paste0(colnames(x.pca2$x)," (",sprintf("%.1f",x.pca2$sdev/sum(x.pca2$sdev)*100),"%)")
+p2=as.data.frame(x.pca2$x)    
+
+
+x.pca2$k=factor(cutree(hclust(dist(x), method='complete'  ),k=10))
+ggbiplot(x.pca2,  ellipse=TRUE, groups=x.pca2$k)+
+  labs(color="cluster")+
+    custom_theme()
+
+```
+
+
+```{r echo=FALSE, fig.cap= "Hierarchical clusters of PCA variables", out.width = '100%'}
+knitr::include_graphics("4_output/PCA/interior_only/hclust_plot")
+```
+
+
+
+
+
+
+
+```{r eval=FALSE, echo=FALSE}
+# Compute hierarchical clustering on principal components
+
+# Compute PCA with ncp = 3.  The argument ncp = 3 is used in the function PCA() to keep only the first three principal components.
+res.pca <- PCA(x[,c(4:5, 8:9, 11:27)], ncp = 4, graph = FALSE)
+
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+
+
+fviz_dend(res.hcpc, 
+          cex = 0.7,                     # Label size
+          palette = "jco",               # Color palette see ?ggpubr::ggpar
+          rect = TRUE, rect_fill = TRUE, # Add rectangle around groups
+          rect_border = "jco",           # Rectangle color
+          labels_track_height = 0.3      # Augment the room for labels
+          )
+
+fviz_cluster(res.hcpc,
+             repel = TRUE,            # Avoid label overlapping
+             show.clust.cent = TRUE, # Show cluster centers
+             palette = "jco",         # Color palette see ?ggpubr::ggpar
+             ggtheme = theme_minimal(),
+             main = "Factor map"
+             )
+fviz_pca_biplot(res.pca)+
+
+  fviz_cluster(res.hcpc,x.pca,
+             repel = TRUE,            # Avoid label overlapping
+             show.clust.cent = TRUE, # Show cluster centers
+             palette = "jco",         # Color palette see ?ggpubr::ggpar
+             ggtheme = theme_minimal(),
+             main = "Factor map"
+             )
+    ggbiplot(x.pca, circle = TRUE)
+```
+
+

@@ -44,6 +44,7 @@ library(RColorBrewer)
 # load ribbon of green
 RoG_Reaches<-st_read("1_data/external/Ribbon_of_Green_Study_Area_Reaches/Reach_Boundaries/RoG_Reaches_V1_210301/RoG_Reaches_V1_210301.shp")
 
+
 # check crs
 st_crs(RoG_Reaches)
 # NAD83_3TM_114_Longitude_Meter_Province_of_Alberta_Canada
@@ -195,9 +196,10 @@ corridors<-st_transform(corridors, crs = st_crs(3776))
 
 ```{r eval=FALSE}
 pp_s_clip<-st_intersection(pp_s, nscr)
+#pp_s_clip<-st_intersection(pp_s, study_area)
 pp_w_clip<-st_intersection(pp_w, nscr)
 corridors_clip<-st_intersection(corridors, nscr)
-
+#corridors_clip<-st_intersection(corridors, study_area)
 save(pp_s_clip, file="1_data/manual/pp_s_clip.rData")
 save(pp_w_clip, file="1_data/manual/pp_w_clip.rData")
 save(corridors_clip, file="1_data/manual/corridors_clip.rData")
@@ -236,6 +238,75 @@ m3<-
 m3
 
 tmap_save(m3, "4_output/maps/pp_s_map.png", asp=0, outer.margins=c(0,0,0,0))
+
+
+# library(OpenStreetMap)
+# library(tmaptools)
+# base<-read_osm(study_area, type="bing")
+# 
+# t<-st_buffer(corridors_clip,10)
+# corridors_outline<-st_union(t)
+# 
+m3_b<-
+  tm_shape(base) + tm_rgb()+
+  tm_shape(study_area)+
+    tm_fill(col="white", alpha=.2)+
+  # tm_shape(v_road_clip)+tm_lines(col="white")+
+  # tm_shape(nscr)+
+  #   tm_fill(col="white", alpha=.6)+
+  #   tm_borders(col = "#636363")+
+  # tm_shape(corridors_clip)+
+  #  tm_fill(col="#238b45", alpha = .5)+
+  #  tm_layout(bg.col="#d9d9d9")+
+  tm_shape(corridors_outline)+
+  tm_fill(col="#238b45", alpha = .5)+
+   tm_layout(bg.col="white")+
+    tm_borders(col="#00441b", lwd=.7)+
+  tm_shape(pp_s_clip)+
+    tm_fill(col="#fb6a4a", alpha = 1)+
+    tm_borders(col = "#fec44f", lwd=.5)+
+  tm_layout(legend.outside = TRUE, legend.text.size = .9, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8)+
+    tm_add_legend(
+      type="symbol",
+      shape=c(22,22),
+      col=c("#238b45", "#fb6a4a"),
+      alpha=c(.5, 1),
+      border.col = c("#00441b", "#fec44f"),
+      border.lwd=.8,
+      size=1.5,
+      labels = c("movement corridors", "pinch-points"))
+#m3_b
+
+tmap_save(m3_b, "4_output/presentation/pp_s_map_b.png", asp=0, outer.margins=c(0,0,0,0))
+# 
+# 
+# m3_b<-
+#   tm_shape(base) + tm_rgb()+ 
+#   tm_shape(study_area)+
+#     tm_fill(col="white", alpha=.2)+
+#   # tm_shape(v_road_clip)+tm_lines(col="white")+
+#   # tm_shape(nscr)+
+#   #   tm_fill(col="white", alpha=.6)+
+#   #   tm_borders(col = "#636363")+
+#   tm_shape(corridors_clip)+
+#    tm_fill(col="#238b45", alpha = .5)+
+#    tm_layout(bg.col="#d9d9d9")+
+#   tm_shape(pp_s_clip)+
+#     tm_fill(col="#fb6a4a", alpha = 1)+
+#     tm_borders(col = "#636363", lwd=1)+
+#   tm_layout(legend.outside = TRUE, legend.text.size = .9, legend.bg.color="white", legend.frame=TRUE, legend.frame.lwd=.8)+
+#     tm_add_legend(
+#       type="symbol", 
+#       shape=c(22,22),
+#       col=c("#238b45", "#fb6a4a"),
+#       alpha=c(.5, 1),
+#       border.col = "black",
+#       border.lwd=.8,
+#       size=1.5,
+#       labels = c("movement corridors", "pinch-points"))
+# m3_b
+# 
+# tmap_save(m3_b, "4_output/presentation/pp_s_map_b.png", asp=0, outer.margins=c(0,0,0,0))
 
 
 m4<-
@@ -282,10 +353,68 @@ knitr::include_graphics("4_output/maps/pp_s_map.png")
 There are groups of pinch points very close to each other. This will lead to significant overlap in buffers. Since neighboring pinch-points will likely be caused by similar biophysical features, I decided to group neighboring pinch-points. Below, polygons are clustered based on a user defined threshold. I chose a 50 m threshold.
 
 
+```{r eval=FALSE, echo=FALSE}
+#create clusters all pinch-points
+x<-pp_all
+
+## Cluster neigboring polygons
+clusterSF <- function(sfpolys, thresh){
+    dmat = st_distance(sfpolys)
+    hc = hclust(as.dist(dmat>thresh), method="single")
+    groups = cutree(hc, h=0.5)
+    d = st_sf(
+        geom = do.call(c,
+            lapply(1:max(groups), function(g){
+                st_union(sfpolys[groups==g,])
+            })
+            )
+        )
+    d$group = 1:nrow(d)
+    d
+}
+
+#set a distance threshold to group polygons
+t<-25
+
+
+#pp_s_clip_clus<-clusterSF(x_f, set_units(t, m))
+pp_summer_clus<-clusterSF(pp_s, set_units(t, m))
+pp_winter_clus<-clusterSF(pp_w, set_units(t, m))
+
+## combine winter and summer pinchpoints into single object
+#add season column
+pp_summer_clus$season<-"summer"
+pp_winter_clus$season<-"winter"
+
+pp_all_clus<-rbind(pp_summer_clus, pp_winter_clus)  
+pp_all_clus$ID <- paste(pp_all_clus$group, pp_all_clus$season, sep = "_")
+
+# add RoG reach data
+#intersect with RoG reaches (keep non overlapping polygons)
+RoG_buf<-st_buffer(RoG_Reaches, dist=0)
+pp_all_clus_RoG_1<-st_intersection(pp_all_clus, RoG_buf)
+df<-as.data.frame(pp_all_clus_RoG_1)
+pp_all_clus_RoG_2<-left_join(pp_all_clus, df[c(3:4)])
+
+# calculate the are of each pinch-point cluster
+pp_all_clus_RoG_2$area <- st_area(pp_all_clus_RoG_2)
+# pp_all_clus$ID <- seq.int(nrow(pp_all_clus))
+
+# reorder columns
+pp_all_clus_RoG<-pp_all_clus_RoG_2[c(3,1,2,4,6,5)]
+
+# save
+save(pp_all_clus_RoG, file="1_data/manual/pp_all_RoG.rdata")
+
+```
+
+
+
+
 #### Filter out small pinch-point polygons {-}
 
 ```{r eval=FALSE}
-x<-pp_s_clip
+# x<-pp_s_clip
 
 #calculate the are of each polygon
 x$area <- st_area(x)
@@ -329,6 +458,9 @@ t<-25
 pp_s_clip_clus<-clusterSF(x_f, set_units(t, m))
 
 save(pp_s_clip_clus, file="3_pipeline/tmp/pp_s_clip_clus.rData")
+
+
+
 
 ## plot clustered pinch-points
 tmap_mode("plot")

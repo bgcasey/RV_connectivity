@@ -67,6 +67,8 @@ load("1_data/manual/curbs_clip.rData")
 ```
 
 
+
+
 #### Pinch-points {-}
 
 Load buffered pinch-point polygons
@@ -104,7 +106,7 @@ Intersect the spatial covariates with the pinch-point buffer polygons. Then calc
 ```{r eval=FALSE}
 # list objects to individually intersect by the pinchpoints
 x<-list(UPLVI_clip, can_poly_clip, picnic_clip, playgrounds_clip, sports_fields_clip)
-names(x)<-c("UPLVI_int", "can_poly_int", "picnic_int", "playgrounds_int", "sports_fields_int")
+names(x)<-c("UPLVI_clip_int", "can_poly_clip_int", "picnic_clip_int", "playgrounds_clip_int", "sports_fields_clip_int")
 
 # calculate the area of the buffered pinchpoints
 pp_s_clip_clus_buf_ext$buf_area<-st_area(pp_s_clip_clus_buf_ext)
@@ -330,11 +332,11 @@ knitr::include_graphics("4_output/maps/summary/can_poly_sum_map_2.png")
 
 `Extract STYPE values for each polygon. Include area and percentage per STYPE
 ```{r eval=FALSE}
-load("3_pipeline/tmp/UPLVI_int.rData")
+load("3_pipeline/tmp/UPLVI_clip_int.rData")
 
 # create a new dataframe with only necessary columns
 
-TYPE<-as.data.frame(UPLVI_int[c(1,61:62, 4:7, 23:26, 42:45, 63:64)])
+TYPE<-as.data.frame(UPLVI_clip_int[c(1,61:62, 4:7, 23:26, 42:45, 63:64)])
 
 #seperate STYPPE ranks into seperate dataframes
 a<-TYPE[c(1:3, 4:7, 16:17)]
@@ -348,14 +350,15 @@ c<-setNames(c, names(a))
 #rbind dataframes together
 abc<-rbind(a, b, c)
 
+
 # create a column with just rank number of STYPES
-s_rank<-gather(TYPE, "STYPE_rank", "STYPE", c(4,8,12))
+s_rank<-tidyr::gather(TYPE, "STYPE_rank", "STYPE", c(4,8,12))
 
 # add the rank column
 abcf<-cbind(abc, s_rank$STYPE_rank)
 
 #reorder columns
-abcf<-abcf[c(1:3, 8, 4:7)]
+#abcf<-abcf[c(1:3, 8, 4:7)]
 
 # rename columns
 colnames(abcf)[c(4:7, 10)]<-c("PRIMECLAS", "LANDCLAS", "STYPE", "STYPEPER", "s_rank")
